@@ -1,7 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    Alert,
     Dimensions,
     FlatList,
     StyleSheet,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import LevelCompleteModal from '../components/LevelCompleteModal'; // ← ADD THIS
 import ScoreDisplay from '../components/ScoreDisplay';
 import { useGameLogic } from '../hooks/useGameLogic';
 import { useSound } from '../hooks/useSound';
@@ -20,6 +20,8 @@ const { width } = Dimensions.get('window');
 
 export default function GameScreen({ route, navigation }) {
   const { levelNumber = 1 } = route.params || {};
+  const [showModal, setShowModal] = useState(false); // ← ADD THIS
+  
   const {
     cards,
     flippedIndices,
@@ -31,7 +33,7 @@ export default function GameScreen({ route, navigation }) {
     starsEarned,
     levelConfig,
     theme,
-    isPreviewMode,  // ← ADD THIS
+    isPreviewMode,
     initializeGame,
     handleCardPress,
   } = useGameLogic(levelNumber);
@@ -51,29 +53,19 @@ export default function GameScreen({ route, navigation }) {
   useEffect(() => {
     if (isGameComplete && starsEarned > 0) {
       playWin();
+      setShowModal(true); // ← SHOW MODAL INSTEAD OF ALERT
     }
   }, [isGameComplete, starsEarned, playWin]);
 
+  // Save progress when game completes
   useEffect(() => {
-    if (isGameComplete && starsEarned > 0) {
+    if (isGameComplete && starsEarned > 0 && !showModal) {
+      // Only save once when modal first appears
       const timeSpent = levelConfig.timeLimit ? (levelConfig.timeLimit - (timeLeft || 0)) : 0;
       saveLevelProgress(levelNumber, starsEarned, score, moves, timeSpent);
       saveGameSession(score, matchedIndices.length / 2, timeSpent, 'Player', levelNumber, starsEarned);
-      
-      const starDisplay = '⭐'.repeat(starsEarned);
-      const nextLevel = levelNumber + 1;
-      
-      Alert.alert(
-        `🎉 Level ${levelNumber} Complete! 🎉`,
-        `${starDisplay}\nScore: ${score}\nMoves: ${moves}\n\n${nextLevel <= 100 ? 'Next level unlocked!' : '🏆 You completed all 100 levels! 🏆'}`,
-        [
-          { text: 'Play Again', onPress: initializeGame },
-          { text: 'Next Level', onPress: () => nextLevel <= 100 && navigation.replace('Game', { levelNumber: nextLevel }) },
-          { text: 'Level Map', onPress: () => navigation.navigate('LevelSelect') },
-        ]
-      );
     }
-  }, [isGameComplete, starsEarned]);
+  }, [isGameComplete, starsEarned, showModal]);
 
   const cardWidth = (width - spacing.medium * 2 - spacing.small * (levelConfig.gridCols - 1)) / levelConfig.gridCols;
   const cardHeight = cardWidth * 1.2;
@@ -99,6 +91,25 @@ export default function GameScreen({ route, navigation }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Modal handlers
+  const handlePlayAgain = () => {
+    setShowModal(false);
+    initializeGame();
+  };
+
+  const handleNextLevel = () => {
+    const nextLevel = levelNumber + 1;
+    if (nextLevel <= 100) {
+      setShowModal(false);
+      navigation.replace('Game', { levelNumber: nextLevel });
+    }
+  };
+
+  const handleLevelMap = () => {
+    setShowModal(false);
+    navigation.navigate('LevelSelect');
+  };
+
   return (
     <LinearGradient
       colors={[candyTheme.gradientStart, candyTheme.gradientEnd]}
@@ -114,7 +125,6 @@ export default function GameScreen({ route, navigation }) {
         )}
       </View>
       
-      {/* ← ADD PREVIEW MODE INDICATOR */}
       {isPreviewMode && (
         <View style={styles.previewOverlay}>
           <Text style={styles.previewText}>🔍 Memorize the cards! 🔍</Text>
@@ -142,6 +152,19 @@ export default function GameScreen({ route, navigation }) {
         <Button title="Restart" onPress={initializeGame} variant="secondary" />
         <Button title="Map" onPress={() => navigation.navigate('LevelSelect')} />
       </View>
+
+      {/* Level Complete Modal */}
+      <LevelCompleteModal
+        visible={showModal}
+        levelNumber={levelNumber}
+        score={score}
+        moves={moves}
+        starsEarned={starsEarned}
+        nextLevel={levelNumber + 1}
+        onPlayAgain={handlePlayAgain}
+        onNextLevel={handleNextLevel}
+        onLevelMap={handleLevelMap}
+      />
     </LinearGradient>
   );
 }

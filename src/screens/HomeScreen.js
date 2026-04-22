@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   badgeGradient: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 25 },
   subtitle: { fontSize: 14, fontWeight: '800', color: '#5C3D2E', letterSpacing: 1 },
   heroContainer: { alignItems: 'center', width: '100%' },
-  emojiCircle: { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 30, shadowColor: '#FFD93D', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10 },
+  emojiCircle: { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 30, shadowColor: '#FFD93D', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20 },
   circleGradient: { width: '100%', height: '100%', borderRadius: 70, justifyContent: 'center', alignItems: 'center' },
   mainEmoji: { fontSize: 72 },
   emojiRow: { flexDirection: 'row', gap: 16, marginBottom: 24 },
