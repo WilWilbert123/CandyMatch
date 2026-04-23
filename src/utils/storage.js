@@ -1,17 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Storage Keys
-const STORAGE_KEYS = {
-  LEVEL_PROGRESS: '@candy_match_level_progress',
-  GAME_SESSIONS: '@candy_match_game_sessions',
-  UNLOCKED_LEVELS: '@candy_match_unlocked_levels',
-  SETTINGS: '@candy_match_settings',
-};
+// Storage Keys - Now dynamic with gameId
+const getStorageKeys = (gameId = 'candy_match') => ({
+  LEVEL_PROGRESS: `@candy_${gameId}_level_progress`,
+  GAME_SESSIONS: `@candy_${gameId}_game_sessions`,
+  UNLOCKED_LEVELS: `@candy_${gameId}_unlocked_levels`,
+  SETTINGS: '@candy_settings',
+});
 
-// Level Progress Management
-export async function saveLevelProgress(levelNumber, starsEarned, score, moves, timeSpent) {
+// Level Progress Management (Game-specific)
+export async function saveLevelProgress(gameId, levelNumber, starsEarned, score, moves, timeSpent) {
   try {
-    const progress = await getLevelProgress();
+    const keys = getStorageKeys(gameId);
+    const progress = await getLevelProgress(gameId);
     const existingLevel = progress.find(l => l.levelNumber === levelNumber);
     
     if (existingLevel) {
@@ -32,13 +33,16 @@ export async function saveLevelProgress(levelNumber, starsEarned, score, moves, 
       });
     }
     
-    await AsyncStorage.setItem(STORAGE_KEYS.LEVEL_PROGRESS, JSON.stringify(progress));
+    await AsyncStorage.setItem(keys.LEVEL_PROGRESS, JSON.stringify(progress));
     
     // Unlock next level if applicable
     const nextLevel = levelNumber + 1;
     if (nextLevel <= 100) {
-      await unlockLevel(nextLevel);
+      await unlockLevel(gameId, nextLevel);
     }
+    
+    // Update total stars for the user
+    await updateTotalStars(gameId);
     
     return true;
   } catch (error) {
@@ -47,9 +51,10 @@ export async function saveLevelProgress(levelNumber, starsEarned, score, moves, 
   }
 }
 
-export async function getLevelProgress() {
+export async function getLevelProgress(gameId) {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.LEVEL_PROGRESS);
+    const keys = getStorageKeys(gameId);
+    const data = await AsyncStorage.getItem(keys.LEVEL_PROGRESS);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error('Error getting level progress:', error);
@@ -57,12 +62,13 @@ export async function getLevelProgress() {
   }
 }
 
-export async function unlockLevel(levelNumber) {
+export async function unlockLevel(gameId, levelNumber) {
   try {
-    const unlockedLevels = await getUnlockedLevels();
+    const keys = getStorageKeys(gameId);
+    const unlockedLevels = await getUnlockedLevels(gameId);
     if (!unlockedLevels.includes(levelNumber)) {
       unlockedLevels.push(levelNumber);
-      await AsyncStorage.setItem(STORAGE_KEYS.UNLOCKED_LEVELS, JSON.stringify(unlockedLevels));
+      await AsyncStorage.setItem(keys.UNLOCKED_LEVELS, JSON.stringify(unlockedLevels));
     }
     return true;
   } catch (error) {
@@ -71,15 +77,16 @@ export async function unlockLevel(levelNumber) {
   }
 }
 
-export async function getUnlockedLevels() {
+export async function getUnlockedLevels(gameId) {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.UNLOCKED_LEVELS);
+    const keys = getStorageKeys(gameId);
+    const data = await AsyncStorage.getItem(keys.UNLOCKED_LEVELS);
     if (data) {
       return JSON.parse(data);
     }
     // First time - unlock level 1
     const initialUnlocked = [1];
-    await AsyncStorage.setItem(STORAGE_KEYS.UNLOCKED_LEVELS, JSON.stringify(initialUnlocked));
+    await AsyncStorage.setItem(keys.UNLOCKED_LEVELS, JSON.stringify(initialUnlocked));
     return initialUnlocked;
   } catch (error) {
     console.error('Error getting unlocked levels:', error);
@@ -87,9 +94,9 @@ export async function getUnlockedLevels() {
   }
 }
 
-export async function getLevelStars(levelNumber) {
+export async function getLevelStars(gameId, levelNumber) {
   try {
-    const progress = await getLevelProgress();
+    const progress = await getLevelProgress(gameId);
     const level = progress.find(l => l.levelNumber === levelNumber);
     return level ? level.bestStars : 0;
   } catch (error) {
@@ -98,10 +105,11 @@ export async function getLevelStars(levelNumber) {
   }
 }
 
-export async function resetLevelProgress() {
+export async function resetLevelProgress(gameId) {
   try {
-    await AsyncStorage.removeItem(STORAGE_KEYS.LEVEL_PROGRESS);
-    await AsyncStorage.setItem(STORAGE_KEYS.UNLOCKED_LEVELS, JSON.stringify([1]));
+    const keys = getStorageKeys(gameId);
+    await AsyncStorage.removeItem(keys.LEVEL_PROGRESS);
+    await AsyncStorage.setItem(keys.UNLOCKED_LEVELS, JSON.stringify([1]));
     return true;
   } catch (error) {
     console.error('Error resetting level progress:', error);
@@ -109,12 +117,14 @@ export async function resetLevelProgress() {
   }
 }
 
-// Game Sessions Management
-export async function saveGameSession(score, matchesFound, timePlayed, childName, levelNumber, starsEarned) {
+// Game Sessions Management (Now handles ALL games)
+export async function saveGameSession(gameId, score, matchesFound, timePlayed, childName, levelNumber, starsEarned) {
   try {
-    const sessions = await getAllGameSessions();
+    const keys = getStorageKeys(gameId);
+    const sessions = await getAllGameSessions(gameId);
     const newSession = {
       id: Date.now(),
+      gameId: gameId,
       score: score,
       matchesFound: matchesFound,
       timePlayed: timePlayed,
@@ -125,9 +135,13 @@ export async function saveGameSession(score, matchesFound, timePlayed, childName
     };
     
     sessions.unshift(newSession);
-    // Keep only last 50 sessions
+    // Keep only last 50 sessions per game
     const trimmedSessions = sessions.slice(0, 50);
-    await AsyncStorage.setItem(STORAGE_KEYS.GAME_SESSIONS, JSON.stringify(trimmedSessions));
+    await AsyncStorage.setItem(keys.GAME_SESSIONS, JSON.stringify(trimmedSessions));
+    
+    // Update global high score
+    await updateGlobalHighScore(score);
+    
     return true;
   } catch (error) {
     console.error('Error saving game session:', error);
@@ -135,9 +149,10 @@ export async function saveGameSession(score, matchesFound, timePlayed, childName
   }
 }
 
-export async function getAllGameSessions() {
+export async function getAllGameSessions(gameId) {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.GAME_SESSIONS);
+    const keys = getStorageKeys(gameId);
+    const data = await AsyncStorage.getItem(keys.GAME_SESSIONS);
     const sessions = data ? JSON.parse(data) : [];
     return sessions.sort((a, b) => b.score - a.score);
   } catch (error) {
@@ -146,9 +161,26 @@ export async function getAllGameSessions() {
   }
 }
 
-export async function getTopScores(limit = 10) {
+export async function getAllGamesSessions() {
   try {
-    const sessions = await getAllGameSessions();
+    const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
+    let allSessions = [];
+    
+    for (const gameId of allGames) {
+      const sessions = await getAllGameSessions(gameId);
+      allSessions = [...allSessions, ...sessions];
+    }
+    
+    return allSessions.sort((a, b) => b.score - a.score);
+  } catch (error) {
+    console.error('Error fetching all games sessions:', error);
+    return [];
+  }
+}
+
+export async function getTopScores(gameId, limit = 10) {
+  try {
+    const sessions = await getAllGameSessions(gameId);
     return sessions.slice(0, limit);
   } catch (error) {
     console.error('Error getting top scores:', error);
@@ -156,9 +188,20 @@ export async function getTopScores(limit = 10) {
   }
 }
 
-export async function clearAllGameSessions() {
+export async function getGlobalTopScores(limit = 20) {
   try {
-    await AsyncStorage.removeItem(STORAGE_KEYS.GAME_SESSIONS);
+    const allSessions = await getAllGamesSessions();
+    return allSessions.slice(0, limit);
+  } catch (error) {
+    console.error('Error getting global top scores:', error);
+    return [];
+  }
+}
+
+export async function clearAllGameSessions(gameId) {
+  try {
+    const keys = getStorageKeys(gameId);
+    await AsyncStorage.removeItem(keys.GAME_SESSIONS);
     return true;
   } catch (error) {
     console.error('Error clearing game sessions:', error);
@@ -166,10 +209,11 @@ export async function clearAllGameSessions() {
   }
 }
 
-// Settings Management
+// Settings Management (Global)
 export async function saveSettings(settings) {
   try {
-    await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    const keys = getStorageKeys();
+    await AsyncStorage.setItem(keys.SETTINGS, JSON.stringify(settings));
     return true;
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -179,7 +223,8 @@ export async function saveSettings(settings) {
 
 export async function getSettings() {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.SETTINGS);
+    const keys = getStorageKeys();
+    const data = await AsyncStorage.getItem(keys.SETTINGS);
     if (data) {
       return JSON.parse(data);
     }
@@ -188,7 +233,7 @@ export async function getSettings() {
       hapticsEnabled: true,
       musicEnabled: true,
     };
-    await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(defaultSettings));
+    await AsyncStorage.setItem(keys.SETTINGS, JSON.stringify(defaultSettings));
     return defaultSettings;
   } catch (error) {
     console.error('Error getting settings:', error);
@@ -196,10 +241,10 @@ export async function getSettings() {
   }
 }
 
-// Utility Functions
-export async function getTotalStarsEarned() {
+// Utility Functions (Game-specific)
+export async function getTotalStarsEarned(gameId) {
   try {
-    const progress = await getLevelProgress();
+    const progress = await getLevelProgress(gameId);
     return progress.reduce((total, level) => total + level.bestStars, 0);
   } catch (error) {
     console.error('Error calculating total stars:', error);
@@ -207,9 +252,9 @@ export async function getTotalStarsEarned() {
   }
 }
 
-export async function getCompletedLevelsCount() {
+export async function getCompletedLevelsCount(gameId) {
   try {
-    const progress = await getLevelProgress();
+    const progress = await getLevelProgress(gameId);
     return progress.length;
   } catch (error) {
     console.error('Error counting completed levels:', error);
@@ -217,9 +262,9 @@ export async function getCompletedLevelsCount() {
   }
 }
 
-export async function getAverageScore() {
+export async function getAverageScore(gameId) {
   try {
-    const sessions = await getAllGameSessions();
+    const sessions = await getAllGameSessions(gameId);
     if (sessions.length === 0) return 0;
     const total = sessions.reduce((sum, session) => sum + session.score, 0);
     return Math.round(total / sessions.length);
@@ -229,15 +274,110 @@ export async function getAverageScore() {
   }
 }
 
-// Clear all data (for testing)
+// Global User Stats
+export async function updateTotalStars(gameId) {
+  try {
+    const totalStars = await getTotalStarsEarned(gameId);
+    const currentTotal = await AsyncStorage.getItem('total_stars');
+    const newTotal = (parseInt(currentTotal) || 0) + totalStars;
+    await AsyncStorage.setItem('total_stars', newTotal.toString());
+    return newTotal;
+  } catch (error) {
+    console.error('Error updating total stars:', error);
+    return 0;
+  }
+}
+
+export async function getGlobalTotalStars() {
+  try {
+    const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
+    let totalStars = 0;
+    
+    for (const gameId of allGames) {
+      const stars = await getTotalStarsEarned(gameId);
+      totalStars += stars;
+    }
+    
+    return totalStars;
+  } catch (error) {
+    console.error('Error getting global total stars:', error);
+    return 0;
+  }
+}
+
+export async function updateGlobalHighScore(score) {
+  try {
+    const currentHighScore = await AsyncStorage.getItem('high_score');
+    const current = parseInt(currentHighScore) || 0;
+    if (score > current) {
+      await AsyncStorage.setItem('high_score', score.toString());
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error updating global high score:', error);
+    return false;
+  }
+}
+
+export async function getGlobalHighScore() {
+  try {
+    const highScore = await AsyncStorage.getItem('high_score');
+    return highScore ? parseInt(highScore) : 0;
+  } catch (error) {
+    console.error('Error getting global high score:', error);
+    return 0;
+  }
+}
+
+export async function getTotalGamesPlayed() {
+  try {
+    const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
+    let totalGames = 0;
+    
+    for (const gameId of allGames) {
+      const sessions = await getAllGameSessions(gameId);
+      totalGames += sessions.length;
+    }
+    
+    return totalGames;
+  } catch (error) {
+    console.error('Error getting total games played:', error);
+    return 0;
+  }
+}
+
+// Clear all data for specific game
+export async function clearGameData(gameId) {
+  try {
+    const keys = getStorageKeys(gameId);
+    await AsyncStorage.multiRemove([
+      keys.LEVEL_PROGRESS,
+      keys.GAME_SESSIONS,
+      keys.UNLOCKED_LEVELS,
+    ]);
+    await unlockLevel(gameId, 1);
+    return true;
+  } catch (error) {
+    console.error('Error clearing game data:', error);
+    return false;
+  }
+}
+
+// Clear all data for all games (for testing)
 export async function clearAllData() {
   try {
-    await AsyncStorage.multiRemove([
-      STORAGE_KEYS.LEVEL_PROGRESS,
-      STORAGE_KEYS.GAME_SESSIONS,
-      STORAGE_KEYS.UNLOCKED_LEVELS,
-    ]);
-    await AsyncStorage.setItem(STORAGE_KEYS.UNLOCKED_LEVELS, JSON.stringify([1]));
+    const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
+    
+    for (const gameId of allGames) {
+      await clearGameData(gameId);
+    }
+    
+    await AsyncStorage.removeItem('total_stars');
+    await AsyncStorage.removeItem('high_score');
+    await AsyncStorage.removeItem('purchased_items');
+    await AsyncStorage.removeItem('achievements');
+    
     return true;
   } catch (error) {
     console.error('Error clearing all data:', error);

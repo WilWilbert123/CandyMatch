@@ -1,0 +1,328 @@
+// src/games/CandyCatch/LevelSelectScreen.js
+import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    FlatList,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { getGameProgress } from '../../shared/utils/globalStorage'; // Fixed import
+import { candyTheme, fontSizes, spacing } from '../../styles/theme';
+
+// Generate Candy Catch levels (50 levels)
+const generateCandyCatchLevels = () => {
+  const levels = [];
+  for (let i = 1; i <= 50; i++) {
+    levels.push({
+      id: i,
+      levelNumber: i,
+      timeLimit: Math.max(20, 35 - Math.floor(i / 5)),
+      targetScore: 40 + (i * 3),
+    });
+  }
+  return levels;
+};
+
+const CANDY_CATCH_LEVELS = generateCandyCatchLevels();
+
+export default function LevelSelectScreen({ navigation, route }) {
+  const { gameId = 'candy_catch' } = route.params || {};
+  const [unlockedLevels, setUnlockedLevels] = useState([1]);
+  const [selectedWorld, setSelectedWorld] = useState(1);
+  const [levelStars, setLevelStars] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  // Create worlds (10 levels per world for 50 total levels)
+  const worlds = [];
+  for (let i = 0; i < CANDY_CATCH_LEVELS.length; i += 10) {
+    worlds.push({
+      id: i / 10 + 1,
+      levels: CANDY_CATCH_LEVELS.slice(i, i + 10),
+      startLevel: i + 1,
+      endLevel: Math.min(i + 10, CANDY_CATCH_LEVELS.length)
+    });
+  }
+
+  const currentWorld = worlds[selectedWorld - 1];
+
+  useEffect(() => {
+    loadData();
+  }, [gameId]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Use getGameProgress from your storage
+      const progress = await getGameProgress(gameId);
+      
+      // Unlocked levels are those completed + 1
+      const completedLevels = progress.completedLevels || [];
+      const unlocked = [1]; // Level 1 is always unlocked
+      
+      // Add completed levels and next level
+      for (let i = 1; i <= 50; i++) {
+        if (completedLevels.includes(i)) {
+          if (!unlocked.includes(i)) unlocked.push(i);
+          // Unlock next level if current is completed
+          if (i + 1 <= 50 && !unlocked.includes(i + 1)) {
+            unlocked.push(i + 1);
+          }
+        }
+      }
+      
+      setUnlockedLevels(unlocked);
+      
+      // Get stars for each level from bestStars
+      const stars = {};
+      for (let i = 1; i <= CANDY_CATCH_LEVELS.length; i++) {
+        stars[i] = progress.bestStars?.[i] || 0;
+      }
+      setLevelStars(stars);
+      
+      console.log('Loaded data:', { unlocked, stars }); // Debug log
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderLevel = ({ item: level }) => {
+    if (!level) return null;
+
+    const isUnlocked = unlockedLevels.includes(level.levelNumber);
+    const stars = levelStars[level.levelNumber] || 0;
+
+    return (
+      <TouchableOpacity
+        style={[styles.levelCard, !isUnlocked && styles.levelLocked]}
+        onPress={() => {
+          if (isUnlocked) {
+            navigation.navigate('CandyCatch', { 
+              levelNumber: level.levelNumber, 
+              gameId: gameId,
+              timeLimit: level.timeLimit,
+              targetScore: level.targetScore,
+            });
+          }
+        }}
+        disabled={!isUnlocked}
+        activeOpacity={0.7}
+      >
+        <LinearGradient
+          colors={isUnlocked ? [candyTheme.candyYellow, candyTheme.candyOrange] : ['#999', '#666']}
+          style={styles.levelGradient}
+        >
+          <Text style={styles.levelNumber}>{level.levelNumber}</Text>
+          <Text style={styles.starsText}>
+            {stars === 3 ? '🌟🌟🌟' : stars === 2 ? '🌟🌟' : stars === 1 ? '🌟' : '☆☆☆'}
+          </Text>
+          {!isUnlocked && <Text style={styles.lockIcon}>🔒</Text>}
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) {
+    return (
+      <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#FFD700" />
+          <Text style={styles.loadingText}>Loading levels...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  return (
+    <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>◀</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>🍬 Candy Catch 🧺</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.worldSelector}
+        contentContainerStyle={styles.worldSelectorContent}
+      >
+        {worlds.map(world => (
+          <TouchableOpacity
+            key={world.id}
+            style={[
+              styles.worldButton,
+              selectedWorld === world.id && styles.worldButtonActive
+            ]}
+            onPress={() => setSelectedWorld(world.id)}
+          >
+            <Text style={[styles.worldText, selectedWorld === world.id && styles.worldTextActive]}>
+              World {world.id}
+            </Text>
+            <Text style={[styles.worldLevels, selectedWorld === world.id && styles.worldLevelsActive]}>
+              {world.startLevel}-{world.endLevel}
+            </Text>
+            <Text style={styles.bigStar}>
+              {selectedWorld === world.id ? '⭐' : '☆'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <FlatList
+        key={`world-${selectedWorld}`}
+        data={currentWorld?.levels || []}
+        renderItem={renderLevel}
+        keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
+        numColumns={4}
+        contentContainerStyle={styles.levelGrid}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.centerContainer}>
+            <Text style={styles.emptyText}>No levels available</Text>
+          </View>
+        }
+      />
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: spacing.large,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.large,
+    paddingTop: spacing.large,
+    paddingBottom: spacing.medium,
+  },
+  backButton: {
+    padding: spacing.small,
+  },
+  backButtonText: {
+    fontSize: fontSizes.body,
+    color: candyTheme.textLight,
+    fontWeight: '600',
+  },
+  placeholder: {
+    width: 50,
+  },
+  title: {
+    fontSize: fontSizes.title,
+    fontWeight: 'bold',
+    color: candyTheme.textLight,
+    textAlign: 'center',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: spacing.xlarge,
+  },
+  loadingText: {
+    fontSize: fontSizes.body,
+    color: candyTheme.textLight,
+    marginTop: spacing.medium,
+  },
+  emptyText: {
+    fontSize: fontSizes.body,
+    color: candyTheme.textLight,
+    textAlign: 'center',
+  },
+  worldSelector: {
+    marginVertical: spacing.medium,
+  },
+  worldSelectorContent: {
+    paddingHorizontal: spacing.medium,
+  },
+  worldButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: spacing.small,
+    marginHorizontal: spacing.small,
+    borderRadius: 12,
+    minWidth: 90,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    height:100
+  },
+  worldButtonActive: {
+    backgroundColor: candyTheme.candyYellow,
+    borderColor: '#FFF',
+  },
+  worldText: {
+    fontWeight: 'bold',
+    color: candyTheme.textLight,
+    fontSize: fontSizes.small,
+  },
+  worldTextActive: {
+    color: candyTheme.textDark,
+  },
+  worldLevels: {
+    fontSize: fontSizes.xsmall,
+    color: candyTheme.textLight,
+    marginTop: 2,
+  },
+  worldLevelsActive: {
+    color: candyTheme.textDark,
+  },
+  levelGrid: {
+    padding: spacing.medium,
+    alignItems: 'center',
+  },
+  levelCard: {
+    width: 70,
+    height: 80,
+    margin: spacing.small,
+    borderRadius: 15,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  levelLocked: {
+    opacity: 0.5,
+  },
+  levelGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  levelNumber: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: candyTheme.textLight,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  starsText: {
+    fontSize: 10,
+    marginTop: 4,
+    color: candyTheme.textLight,
+  },
+  lockIcon: {
+    fontSize: 20,
+    marginTop: 4,
+    color: candyTheme.textLight,
+  },
+  bigStar: {
+    fontSize: 26,
+    marginTop: 6,
+    textAlign: 'center',
+    color: '#FFD700',
+  },
+});

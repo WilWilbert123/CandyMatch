@@ -7,21 +7,22 @@ import {
     Text,
     View,
 } from 'react-native';
-import Button from '../components/Button';
-import Card from '../components/Card';
-import LevelCompleteModal from '../components/LevelCompleteModal'; // ← ADD THIS
-import ScoreDisplay from '../components/ScoreDisplay';
-import { useGameLogic } from '../hooks/useGameLogic';
-import { useSound } from '../hooks/useSound';
-import { candyTheme, spacing } from '../styles/theme';
-import { saveGameSession, saveLevelProgress } from '../utils/storage';
+import Button from '../../components/Button';
+import Card from '../../components/Card';
+import LevelCompleteModal from '../../components/LevelCompleteModal';
+import ScoreDisplay from '../../components/ScoreDisplay';
+import { useSound } from '../../hooks/useSound';
+import { candyTheme, spacing } from '../../styles/theme';
+import { saveGameSession, saveLevelProgress } from '../../utils/storage';
+import { useGameLogic } from './useGameLogic';
 
 const { width } = Dimensions.get('window');
 
 export default function GameScreen({ route, navigation }) {
-  const { levelNumber = 1 } = route.params || {};
-  const [showModal, setShowModal] = useState(false); // ← ADD THIS
-  
+  const { levelNumber = 1, gameId = 'candy_match' } = route.params || {}; // Add gameId with default
+  const [showModal, setShowModal] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
+
   const {
     cards,
     flippedIndices,
@@ -42,6 +43,7 @@ export default function GameScreen({ route, navigation }) {
 
   useEffect(() => {
     initializeGame();
+    setHasSaved(false);
   }, [levelNumber]);
 
   useEffect(() => {
@@ -53,19 +55,32 @@ export default function GameScreen({ route, navigation }) {
   useEffect(() => {
     if (isGameComplete && starsEarned > 0) {
       playWin();
-      setShowModal(true); // ← SHOW MODAL INSTEAD OF ALERT
+      setShowModal(true);
     }
   }, [isGameComplete, starsEarned, playWin]);
 
-  // Save progress when game completes
+  // Save progress when game completes - UPDATED with gameId
   useEffect(() => {
-    if (isGameComplete && starsEarned > 0 && !showModal) {
-      // Only save once when modal first appears
+    if (isGameComplete && starsEarned > 0 && showModal && !hasSaved) {
       const timeSpent = levelConfig.timeLimit ? (levelConfig.timeLimit - (timeLeft || 0)) : 0;
-      saveLevelProgress(levelNumber, starsEarned, score, moves, timeSpent);
-      saveGameSession(score, matchedIndices.length / 2, timeSpent, 'Player', levelNumber, starsEarned);
+      // Save level progress with gameId
+      saveLevelProgress(gameId, levelNumber, starsEarned, score, moves, timeSpent);
+      // Save game session with gameId
+      saveGameSession(gameId, score, matchedIndices.length / 2, timeSpent, 'Player', levelNumber, starsEarned);
+      setHasSaved(true);
     }
-  }, [isGameComplete, starsEarned, showModal]);
+  }, [isGameComplete, starsEarned, showModal, hasSaved, gameId, levelNumber, levelConfig, timeLeft, score, moves, matchedIndices.length]);
+
+  // Add a safety check - if levelConfig is undefined, show loading
+  if (!levelConfig || !cards.length) {
+    return (
+      <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
+        <View style={styles.centerContent}>
+          <Text style={styles.title}>Loading Game...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
 
   const cardWidth = (width - spacing.medium * 2 - spacing.small * (levelConfig.gridCols - 1)) / levelConfig.gridCols;
   const cardHeight = cardWidth * 1.2;
@@ -94,6 +109,7 @@ export default function GameScreen({ route, navigation }) {
   // Modal handlers
   const handlePlayAgain = () => {
     setShowModal(false);
+    setHasSaved(false);
     initializeGame();
   };
 
@@ -101,13 +117,14 @@ export default function GameScreen({ route, navigation }) {
     const nextLevel = levelNumber + 1;
     if (nextLevel <= 100) {
       setShowModal(false);
-      navigation.replace('Game', { levelNumber: nextLevel });
+      setHasSaved(false);
+      navigation.replace('Game', { levelNumber: nextLevel, gameId: gameId });
     }
   };
 
   const handleLevelMap = () => {
     setShowModal(false);
-    navigation.navigate('LevelSelect');
+    navigation.navigate('LevelSelect', { gameId: gameId });
   };
 
   return (
@@ -117,7 +134,7 @@ export default function GameScreen({ route, navigation }) {
     >
       <View style={styles.levelHeader}>
         <Text style={styles.levelText}>Level {levelNumber}</Text>
-        <Text style={styles.themeText}>{theme.name}</Text>
+        <Text style={styles.themeText}>{theme?.name || 'Candy Match'}</Text>
         {timeLeft !== null && (
           <Text style={[styles.timerText, timeLeft < 30 && styles.timerWarning]}>
             ⏱️ {formatTime(timeLeft)}
@@ -150,7 +167,7 @@ export default function GameScreen({ route, navigation }) {
       
       <View style={styles.buttonContainer}>
         <Button title="Restart" onPress={initializeGame} variant="secondary" />
-        <Button title="Map" onPress={() => navigation.navigate('LevelSelect')} />
+        <Button title="Map" onPress={() => navigation.navigate('LevelSelect', { gameId: gameId })} />
       </View>
 
       {/* Level Complete Modal */}
@@ -218,5 +235,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     padding: spacing.medium,
     marginBottom: spacing.medium,
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: candyTheme.textLight,
   },
 });
