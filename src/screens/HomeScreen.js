@@ -13,17 +13,94 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 const { width, height } = Dimensions.get('window');
 
-// Custom animated button component
-const AnimatedButton = ({ item, index, onPress, fadeAnim, slideAnim }) => {
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
+// Floating Candy Piece Animation
+const FloatingCandy = ({ delay, left, size, emoji }) => {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const floatAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, {
+          toValue: -20,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const rotateAnimation = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 4000,
+        useNativeDriver: true,
+      })
+    );
+
+    setTimeout(() => {
+      floatAnimation.start();
+      rotateAnimation.start();
+    }, delay);
+
+    return () => {
+      floatAnimation.stop();
+      rotateAnimation.stop();
+    };
+  }, [delay]);
+
+  const spin = rotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Animated.Text
+      style={[
+        styles.floatingCandy,
+        {
+          left: left,
+          fontSize: size,
+          transform: [{ translateY }, { rotate: spin }],
+        },
+      ]}>
+      {emoji}
+    </Animated.Text>
+  );
+};
+
+// Custom animated button component with stable pop/zoom effect
+const AnimatedButton = ({ item, index, onPress }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const popAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Staggered pop animation for each button
+    const delay = index * 150;
+    
+    setTimeout(() => {
+      Animated.sequence([
+        Animated.spring(popAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 80,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, delay);
+  }, [index]);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      friction: 5,
+      toValue: 0.92,
+      friction: 3,
       tension: 40,
       useNativeDriver: true,
     }).start();
@@ -32,138 +109,123 @@ const AnimatedButton = ({ item, index, onPress, fadeAnim, slideAnim }) => {
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      friction: 5,
+      friction: 3,
       tension: 40,
       useNativeDriver: true,
     }).start();
   };
 
-  useEffect(() => {
-    // Glow animation for first button (Game Hub)
-    if (index === 0) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 1500,
-            useNativeDriver: false,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0,
-            duration: 1500,
-            useNativeDriver: false,
-          }),
-        ])
-      ).start();
-    }
-  }, []);
+  // Pop animation interpolation
+  const popScale = popAnim.interpolate({
+    inputRange: [0, 0.5, 0.8, 1],
+    outputRange: [0.7, 1.05, 0.98, 1],
+  });
+
+  const popTranslateY = popAnim.interpolate({
+    inputRange: [0, 0.6, 1],
+    outputRange: [30, -5, 0],
+  });
+
+  const popOpacity = popAnim.interpolate({
+    inputRange: [0, 0.2, 0.6, 1],
+    outputRange: [0, 0.7, 1, 1],
+  });
 
   return (
     <Animated.View
       style={[
         styles.menuButtonWrapper,
         {
-          opacity: fadeAnim,
+          opacity: popOpacity,
           transform: [
-            { translateX: slideAnim },
-            { scale: scaleAnim },
+            { scale: Animated.multiply(scaleAnim, popScale) },
+            { translateY: popTranslateY },
           ],
         },
       ]}>
       <TouchableOpacity
-        activeOpacity={0.85}
+        activeOpacity={0.9}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={onPress}>
-        <Animated.View
-          style={[
-            styles.glowContainer,
-            index === 0 && {
-              shadowOpacity: glowAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.3, 0.8],
-              }),
-              shadowRadius: glowAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [10, 20],
-              }),
-            },
-          ]}>
-          <LinearGradient
-            colors={item.colors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.menuGradient}>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuEmoji}>{item.emoji || '🎮'}</Text>
-              <View style={styles.menuTextContainer}>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuDescription}>{item.description}</Text>
-              </View>
-              <View style={styles.menuArrow}>
-                <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
-              </View>
+        <LinearGradient
+          colors={item.colors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.menuGradient}>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuEmoji}>{item.emoji || '🎮'}</Text>
+            <View style={styles.menuTextContainer}>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Text style={styles.menuDescription}>{item.description}</Text>
             </View>
-          </LinearGradient>
-        </Animated.View>
+            <View style={styles.menuArrow}>
+              <Ionicons name="arrow-forward" size={28} color="#FFFFFF" />
+            </View>
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
     </Animated.View>
   );
 };
 
-// Reset Confirmation Modal
-const ResetModal = ({ visible, onClose, onConfirm }) => {
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const overlayAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      scaleAnim.setValue(0.8);
-      overlayAnim.setValue(0);
-    }
-  }, [visible]);
-
-  
-};
-
-// User Stats Card
+// User Stats Card with confetti effect
 const UserStatsCard = ({ stars, itemsCount, highScore, totalGamesPlayed }) => {
-  const statsAnim = useRef(new Animated.Value(0)).current;
+  const starPulse = useRef(new Animated.Value(1)).current;
+  const cardScale = useRef(new Animated.Value(0.8)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.spring(statsAnim, {
-      toValue: 1,
-      friction: 8,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    // Card entrance animation
+    Animated.parallel([
+      Animated.spring(cardScale, {
+        toValue: 1,
+        friction: 6,
+        tension: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardOpacity, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Star pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.spring(starPulse, {
+          toValue: 1.15,
+          friction: 2,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+        Animated.spring(starPulse, {
+          toValue: 1,
+          friction: 2,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, []);
 
   return (
     <Animated.View
       style={[
         styles.statsContainer,
-        { transform: [{ scale: statsAnim }] },
+        {
+          transform: [{ scale: cardScale }],
+          opacity: cardOpacity,
+        },
       ]}>
       <LinearGradient
-        colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.05)']}
+        colors={['rgba(255,215,0,0.3)', 'rgba(255,105,180,0.2)']}
         style={styles.statsCard}>
         <View style={styles.statItem}>
-          <Text style={styles.statEmoji}>⭐</Text>
+          <Animated.Text style={[styles.statEmoji, { transform: [{ scale: starPulse }] }]}>
+            ⭐
+          </Animated.Text>
           <Text style={styles.statValue}>{stars}</Text>
           <Text style={styles.statLabel}>Stars</Text>
         </View>
@@ -190,55 +252,165 @@ const UserStatsCard = ({ stars, itemsCount, highScore, totalGamesPlayed }) => {
   );
 };
 
+// Ripple Effect Component
+const RippleEffect = ({ x, y, visible }) => {
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    if (visible) {
+      scaleAnim.setValue(0);
+      opacityAnim.setValue(0.8);
+      
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 3,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View
+      style={[
+        styles.ripple,
+        {
+          left: x - 50,
+          top: y - 50,
+          transform: [{ scale: scaleAnim }],
+          opacity: opacityAnim,
+        },
+      ]}>
+      <LinearGradient
+        colors={['rgba(255,215,0,0.8)', 'rgba(255,105,180,0.6)']}
+        style={styles.rippleGradient}
+      />
+    </Animated.View>
+  );
+};
+
+// Floating Stars Animation
+const FloatingStar = ({ delay, left, top }) => {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    const animation = Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -120,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 4,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    setTimeout(() => {
+      animation.start();
+    }, delay);
+
+    return () => animation.stop();
+  }, [delay]);
+
+  return (
+    <Animated.Text
+      style={[
+        styles.floatingStar,
+        {
+          left: left,
+          top: top,
+          transform: [{ translateY }, { scale }],
+          opacity: opacity,
+        },
+      ]}>
+      ⭐
+    </Animated.Text>
+  );
+};
+
 export default function HomeScreen({ navigation }) {
   const [stars, setStars] = useState(0);
   const [itemsCount, setItemsCount] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [totalGamesPlayed, setTotalGamesPlayed] = useState(0);
-  const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [ripple, setRipple] = useState({ x: 0, y: 0, visible: false });
+  const [floatingStars, setFloatingStars] = useState([]);
+  const [tapEffectVisible, setTapEffectVisible] = useState(false);
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const headerScaleAnim = useRef(new Animated.Value(0.9)).current;
+  // Entrance animations
+  const headerScale = useRef(new Animated.Value(0.8)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const welcomeScale = useRef(new Animated.Value(0.9)).current;
+  const welcomeOpacity = useRef(new Animated.Value(0)).current;
 
-  // Enhanced menu items with descriptions and emojis
+  // Enhanced menu items
   const menuItems = [
     {
       title: 'Game Hub',
       emoji: '🎮',
-      description: 'Play all candy games',
+      description: 'Play 10 awesome candy games!',
       screen: 'GameHub',
-      colors: ['#F1C40F', '#E67E22'],
+      colors: ['#FFD700', '#FF8C00'],
     },
     {
       title: 'Global High Scores',
       emoji: '🌍',
-      description: 'View all game records',
+      description: 'See who\'s the candy champion!',
       screen: 'GlobalHighScores',
-      colors: ['#FF6B6B', '#4ECDC4'],
+      colors: ['#00CED1', '#1E90FF'],
     },
     {
       title: 'Candy Collection',
       emoji: '🍬',
-      description: 'View your collection',
+      description: 'Your sweet collection gallery',
       screen: 'CandyCollection',
-      colors: ['#FF69B4', '#9B59B6'],
+      colors: ['#FF69B4', '#DA70D6'],
     },
     {
       title: 'Candy Shop',
       emoji: '🏪',
-      description: 'Spend your stars',
+      description: 'Spend stars on cool items!',
       screen: 'CandyShop',
-      colors: ['#3498DB', '#2ECC71'],
+      colors: ['#32CD32', '#228B22'],
     },
     {
       title: 'Achievements',
       emoji: '🏆',
-      description: 'Track your progress',
+      description: 'Unlock awesome badges!',
       screen: 'Achievements',
-      colors: ['#E67E22', '#E74C3C'],
+      colors: ['#FF4500', '#FF1493'],
     },
+  ];
+
+  // Floating candies positions
+  const floatingCandies = [
+    { emoji: '🍬', left: '5%', size: 30, delay: 0 },
+    { emoji: '🍭', left: '85%', size: 35, delay: 500 },
+    { emoji: '🍫', left: '15%', size: 25, delay: 1000 },
+    { emoji: '🍬', left: '75%', size: 28, delay: 1500 },
+    { emoji: '🍭', left: '45%', size: 32, delay: 2000 },
+    { emoji: '🍬', left: '60%', size: 24, delay: 2500 },
+    { emoji: '🍫', left: '30%', size: 30, delay: 3000 },
   ];
 
   useEffect(() => {
@@ -248,20 +420,26 @@ export default function HomeScreen({ navigation }) {
 
   const animateEntrance = () => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
+      Animated.spring(headerScale, {
         toValue: 1,
-        duration: 800,
+        friction: 5,
+        tension: 60,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 600,
         useNativeDriver: true,
       }),
-      Animated.spring(headerScaleAnim, {
+      Animated.spring(welcomeScale, {
         toValue: 1,
-        friction: 8,
-        tension: 40,
+        friction: 5,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(welcomeOpacity, {
+        toValue: 1,
+        duration: 500,
         useNativeDriver: true,
       }),
     ]).start();
@@ -279,7 +457,6 @@ export default function HomeScreen({ navigation }) {
       const savedHighScore = await AsyncStorage.getItem('high_score');
       setHighScore(savedHighScore ? parseInt(savedHighScore) : 0);
 
-      // Load total games played from all game sessions
       const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
       let totalGames = 0;
       for (const gameId of allGames) {
@@ -299,67 +476,80 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate(screen);
   };
 
-  const handleResetProgress = async () => {
-    try {
-      // Clear all game data
-      const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
-      
-      for (const gameId of allGames) {
-        await AsyncStorage.removeItem(`@candy_game_sessions_${gameId}`);
-        await AsyncStorage.removeItem(`@candy_match_level_progress_${gameId}`);
-        await AsyncStorage.setItem(`@candy_match_unlocked_levels_${gameId}`, JSON.stringify([1]));
-      }
-      
-      // Clear user data
-      await AsyncStorage.removeItem('total_stars');
-      await AsyncStorage.removeItem('purchased_items');
-      await AsyncStorage.removeItem('high_score');
-      await AsyncStorage.removeItem('achievements');
-      
-      // Reset state
-      setStars(0);
-      setItemsCount(0);
-      setHighScore(0);
-      setTotalGamesPlayed(0);
-      
-      setResetModalVisible(false);
-      
-      // Show success message (optional)
-      alert('All progress has been reset successfully!');
-    } catch (error) {
-      console.error('Error resetting progress:', error);
-      alert('Error resetting progress. Please try again.');
+  const handleTapEffect = (event) => {
+    const { locationX, locationY } = event.nativeEvent;
+    
+    setRipple({ x: locationX, y: locationY, visible: true });
+    setTimeout(() => setRipple({ ...ripple, visible: false }), 600);
+    
+    const newStars = [];
+    for (let i = 0; i < 8; i++) {
+      newStars.push({
+        id: Date.now() + i,
+        left: locationX - 20 + Math.random() * 40,
+        top: locationY - 20 + Math.random() * 40,
+        delay: i * 50,
+      });
     }
+    setFloatingStars(newStars);
+    setTimeout(() => setFloatingStars([]), 2000);
+    
+    setTapEffectVisible(true);
+    setTimeout(() => setTapEffectVisible(false), 200);
   };
 
   return (
     <>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <LinearGradient
-        colors={['#667eea', '#764ba2', '#f093fb']}
+        colors={['#FF6B6B', '#FF8E53', '#FFD93D']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.container}>
+        
+        {/* Floating candies background */}
+        {floatingCandies.map((candy, index) => (
+          <FloatingCandy key={index} {...candy} />
+        ))}
+        
+        {/* Floating stars from taps */}
+        {floatingStars.map((star) => (
+          <FloatingStar key={star.id} {...star} />
+        ))}
+        
+        {/* Ripple effect */}
+        <RippleEffect {...ripple} />
+        
         <SafeAreaView style={styles.safeArea}>
           <ScrollView
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
             bounces={true}>
+            
+            {/* Welcome Section */}
+            <Animated.View
+              style={[
+                styles.welcomeSection,
+                {
+                  opacity: welcomeOpacity,
+                  transform: [{ scale: welcomeScale }],
+                },
+              ]}>
+              <Text style={styles.welcomeText}>🎉 Welcome, Candy Champion! 🎉</Text>
+            </Animated.View>
+
             {/* Header Section */}
             <Animated.View
               style={[
                 styles.header,
                 {
-                  opacity: fadeAnim,
-                  transform: [{ scale: headerScaleAnim }],
+                  opacity: headerOpacity,
+                  transform: [{ scale: headerScale }],
                 },
               ]}>
               <Text style={styles.title}>
                 Candy Match
                 <Text style={styles.titleAccent}> Adventure</Text>
-              </Text>
-              <Text style={styles.subtitle}>
-                Collect stars, unlock achievements, and become the candy master!
               </Text>
             </Animated.View>
 
@@ -371,58 +561,33 @@ export default function HomeScreen({ navigation }) {
               totalGamesPlayed={totalGamesPlayed}
             />
 
-            {/* Menu Section */}
+            {/* Menu Section - Buttons pop in automatically */}
             <View style={styles.menuSection}>
-              <Animated.View
-                style={[
-                  styles.menuHeader,
-                  {
-                    opacity: fadeAnim,
-                    transform: [{ translateX: slideAnim }],
-                  },
-                ]}>
-                <Text style={styles.menuSectionTitle}>Game Modes</Text>
-                <Text style={styles.menuSectionSubtitle}>
-                  Choose your adventure
-                </Text>
-              </Animated.View>
+              <View style={styles.menuHeader}>
+                <Text style={styles.menuSectionTitle}>Choose Your Game!</Text>
+              </View>
 
+              {/* Each button pops in with staggered delay */}
               {menuItems.map((item, index) => (
                 <AnimatedButton
                   key={index}
                   item={item}
                   index={index}
                   onPress={() => handleNavigation(item.screen)}
-                  fadeAnim={fadeAnim}
-                  slideAnim={slideAnim}
                 />
               ))}
-
-              {/* Reset Button */}
-              <Animated.View
-                style={[
-                  styles.resetButtonWrapper,
-                  {
-                    opacity: fadeAnim,
-                    transform: [{ translateX: slideAnim }],
-                  },
-                ]}>
-               
-              </Animated.View>
             </View>
 
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                Developed by John Wilbert Gamis
+                🍭 Developed by John Wilbert Gamis 🍬
               </Text>
-              <Text style={styles.footerVersion}>Version 2.0.0</Text>
+              <Text style={styles.footerVersion}>Version 2.0.0 ⭐</Text>
             </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
-
-      
     </>
   );
 }
@@ -431,40 +596,114 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   content: { alignItems: 'center', paddingVertical: 20, paddingBottom: 40 },
-  header: { alignItems: 'center', paddingHorizontal: 24, marginBottom: 24 },
-  headerBadge: { backgroundColor: 'rgba(255,215,0,0.9)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
-  headerBadgeText: { fontSize: 12, fontWeight: '800', color: '#2C3E50' },
-  title: { fontSize: 42, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, marginBottom: 8 },
-  titleAccent: { color: '#FFD700' },
-  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', paddingHorizontal: 20, lineHeight: 20 },
-  statsContainer: { width: width * 0.92, marginBottom: 24 },
-  statsCard: { flexDirection: 'row', borderRadius: 20, padding: 16, justifyContent: 'space-around', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  statItem: { alignItems: 'center', flex: 1 },
-  statEmoji: { fontSize: 24, marginBottom: 4 },
-  statValue: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 },
-  statLabel: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' },
-  statDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)' },
-  menuSection: { width: width * 0.92, marginTop: 8 },
-  menuHeader: { marginBottom: 16, paddingHorizontal: 8 },
-  menuSectionTitle: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
-  menuSectionSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
-  menuButtonWrapper: { marginBottom: 12 },
-  glowContainer: { borderRadius: 20, shadowColor: '#FFD700', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 10 },
-  menuGradient: { borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  menuContent: { flexDirection: 'row', alignItems: 'center' },
-  menuEmoji: { fontSize: 40, marginRight: 16 },
-  menuTextContainer: { flex: 1 },
-  menuTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
-  menuDescription: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
-  menuArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  resetButtonWrapper: { marginTop: 16, marginBottom: 8 },
-  resetButton: { borderRadius: 20, overflow: 'hidden' },
-  resetGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 },
-  resetButtonEmoji: { fontSize: 20 },
-  resetButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
-  footer: { marginTop: 32, alignItems: 'center' },
-  footerText: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 },
-  footerVersion: { fontSize: 10, color: 'rgba(255,255,255,0.4)' },
- 
   
+  floatingCandy: {
+    position: 'absolute',
+    top: -30,
+    opacity: 0.4,
+    zIndex: 0,
+  },
+  
+  floatingStar: {
+    position: 'absolute',
+    fontSize: 20,
+    zIndex: 999,
+  },
+  
+  ripple: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    zIndex: 1000,
+  },
+  
+  rippleGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+  },
+  
+  welcomeSection: {
+    marginTop: 10,
+    marginBottom: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  welcomeText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  
+  header: { alignItems: 'center', paddingHorizontal: 24, marginBottom: 20 },
+  title: { 
+    fontSize: 48, 
+    fontWeight: '800', 
+    color: '#FFFFFF', 
+    textAlign: 'center', 
+    textShadowColor: 'rgba(0,0,0,0.3)', 
+    textShadowOffset: { width: 0, height: 3 }, 
+    textShadowRadius: 6, 
+    marginBottom: 12,
+    letterSpacing: 1,
+  },
+  titleAccent: { color: '#FFD700', textShadowColor: 'rgba(0,0,0,0.2)' },
+  
+  statsContainer: { width: width * 0.94, marginBottom: 24 },
+  statsCard: { 
+    flexDirection: 'row', 
+    borderRadius: 30, 
+    padding: 20, 
+    justifyContent: 'space-around', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(255,255,255,0.2)', 
+    borderWidth: 2, 
+    borderColor: 'rgba(255,215,0,0.5)',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  statItem: { alignItems: 'center', flex: 1 },
+  statEmoji: { fontSize: 32, marginBottom: 6 },
+  statValue: { fontSize: 24, fontWeight: '800', color: '#FFD700', marginBottom: 4, textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  statLabel: { fontSize: 11, fontWeight: '700', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statDivider: { width: 2, height: 45, backgroundColor: 'rgba(255,215,0,0.5)', borderRadius: 1 },
+  
+  menuSection: { width: width * 0.92, marginTop: 8 },
+  menuHeader: { marginBottom: 20, paddingHorizontal: 8 },
+  menuSectionTitle: { fontSize: 28, fontWeight: '800', color: '#FFFFFF', marginBottom: 6, textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
+  
+  menuButtonWrapper: { marginBottom: 14 },
+  menuGradient: { 
+    borderRadius: 25, 
+    padding: 18, 
+    borderWidth: 2, 
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  menuContent: { flexDirection: 'row', alignItems: 'center' },
+  menuEmoji: { fontSize: 48, marginRight: 18 },
+  menuTextContainer: { flex: 1 },
+  menuTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 4, letterSpacing: 0.5 },
+  menuDescription: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
+  menuArrow: { 
+    width: 42, 
+    height: 42, 
+    borderRadius: 21, 
+    backgroundColor: 'rgba(255,255,255,0.3)', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  
+  footer: { marginTop: 40, alignItems: 'center' },
+  footerText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.8)', marginBottom: 6 },
+  footerVersion: { fontSize: 11, color: 'rgba(255,255,255,0.6)' },
 });

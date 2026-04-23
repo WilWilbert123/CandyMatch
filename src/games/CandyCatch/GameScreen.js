@@ -4,11 +4,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
     Dimensions,
+    PanResponder,
     Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
-    TouchableWithoutFeedback,
     Vibration,
     View
 } from 'react-native';
@@ -21,8 +21,8 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const getGameConfig = (level) => ({
   timeLimit: Math.max(20, 35 - Math.floor(level / 5)),
   targetScore: 40 + (level * 3),
-  fallSpeed: 4,
-  spawnRate: 900,
+  fallSpeed: 3.5, // Reduced for better catch chance
+  spawnRate: 1000, // Increased for better performance
 });
 
 export default function CandyCatchGame({ navigation, route }) {
@@ -50,7 +50,7 @@ export default function CandyCatchGame({ navigation, route }) {
   const animationFrame = useRef(null);
   const basketX = useRef(SCREEN_WIDTH / 2 - 50);
   const basketAnim = useRef(new Animated.Value(SCREEN_WIDTH / 2 - 50)).current;
-  const lastTimestamp = useRef(0);
+  const lastUpdateTime = useRef(Date.now());
   
   const targetScoreValue = customTargetScore || config.targetScore;
   
@@ -63,6 +63,27 @@ export default function CandyCatchGame({ navigation, route }) {
     { emoji: '🍩', value: 30, size: 60, color: '#FFB6C1' },
     { emoji: '🍰', value: 35, size: 65, color: '#FF69B4' },
   ];
+  
+  // PanResponder for basket movement
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderMove: (evt, gestureState) => {
+      // Get touch location relative to screen
+      const touchX = evt.nativeEvent.locationX;
+      let newX = touchX - 50;
+      newX = Math.max(0, Math.min(SCREEN_WIDTH - 100, newX));
+      basketX.current = newX;
+      basketAnim.setValue(newX);
+    },
+    onPanResponderGrant: (evt) => {
+      const touchX = evt.nativeEvent.locationX;
+      let newX = touchX - 50;
+      newX = Math.max(0, Math.min(SCREEN_WIDTH - 100, newX));
+      basketX.current = newX;
+      basketAnim.setValue(newX);
+    },
+  });
   
   // Spawn a new candy
   const spawnCandy = () => {
@@ -113,20 +134,15 @@ export default function CandyCatchGame({ navigation, route }) {
     }, 300);
   };
   
-  // Main animation loop with collision detection
+  // Main game loop with collision detection
   useEffect(() => {
     if (!gameActive) return;
     
-    const animate = (timestamp) => {
-      if (!lastTimestamp.current) {
-        lastTimestamp.current = timestamp;
-        animationFrame.current = requestAnimationFrame(animate);
-        return;
-      }
+    const gameLoop = () => {
+      const now = Date.now();
+      const delta = Math.min(32, now - lastUpdateTime.current);
       
-      // Move candies at consistent speed (60fps)
-      const delta = Math.min(32, timestamp - lastTimestamp.current);
-      if (delta >= 16) { // Update every frame
+      if (delta >= 16) { // Update at ~60fps
         setCandies(prevCandies => {
           const remainingCandies = [];
           const basketLeft = basketX.current;
@@ -135,32 +151,33 @@ export default function CandyCatchGame({ navigation, route }) {
           const basketBottom = SCREEN_HEIGHT - 30;
           
           let caughtAny = false;
-          let newCombo = combo;
+          let newComboValue = combo;
           
           for (const candy of prevCandies) {
-            // Update candy position with frame-independent movement
-            const newY = candy.y + (config.fallSpeed * (delta / 16));
+            // Update candy position
+            const newY = candy.y + config.fallSpeed;
             const candyLeft = candy.x;
             const candyRight = candy.x + candy.size;
             const candyTop = newY;
             const candyBottom = newY + candy.size;
             
-            // Check collision with basket (more precise)
-            const colliding = candyBottom >= basketTop && 
-                             candyTop <= basketBottom &&
-                             candyRight > basketLeft && 
-                             candyLeft < basketRight;
+            // Check collision with basket
+            const isColliding = candyBottom >= basketTop && 
+                               candyTop <= basketBottom &&
+                               candyRight > basketLeft && 
+                               candyLeft < basketRight;
             
-            if (colliding && newY + candy.size >= basketTop) {
-              // CATCH! Candy caught by basket
+            if (isColliding && candyBottom >= basketTop) {
+              // CATCH!
               caughtAny = true;
               if (Platform.OS !== 'web') Vibration.vibrate(30);
               
               // Update combo
-              newCombo = combo + 1;
+              newComboValue = combo + 1;
+              setCombo(newComboValue);
               
               // Calculate score with combo bonus
-              const bonus = Math.floor(candy.value * (newCombo * 0.1));
+              const bonus = Math.floor(candy.value * (newComboValue * 0.1));
               const totalGain = candy.value + bonus;
               
               setScore(prev => prev + totalGain);
@@ -170,48 +187,48 @@ export default function CandyCatchGame({ navigation, route }) {
               addSparkle(candy.x + candy.size/2, basketTop);
               
               setTimeout(() => setBasketGlow(false), 150);
-              // Candy caught - do NOT add to remaining
+              // Don't add to remaining (candy is caught)
             } 
             else if (candyBottom >= SCREEN_HEIGHT) {
-              // MISS! Candy fell past basket
+              // MISS!
               setMissedCandies(prev => {
                 const newMissed = prev + 1;
-                if (newMissed >= 8) setGameActive(false);
+                if (newMissed >= 8) {
+                  setGameActive(false);
+                }
                 return newMissed;
               });
-              newCombo = 0;
-              // Candy missed - do NOT add to remaining
+              setCombo(0);
+              // Don't add to remaining (candy is missed)
             } 
             else {
-              // Candy still falling
+              // Still falling
               remainingCandies.push({ ...candy, y: newY });
             }
           }
           
-          // Update combo after processing all candies
-          if (caughtAny) {
-            setCombo(newCombo);
-          } else if (prevCandies.length > 0 && !caughtAny) {
-            // Reset combo if no candy caught in this frame and there were candies
-            // But don't reset if candies are just falling
-            const anyNearBottom = prevCandies.some(c => c.y + c.size > SCREEN_HEIGHT - 150);
-            if (!anyNearBottom) {
-              setCombo(0);
-            }
+          // Update combo if nothing caught this frame
+          if (!caughtAny && prevCandies.length > 0) {
+            // Don't reset combo immediately, let it decay over time
+            // For now, keep combo as is
           }
           
           return remainingCandies;
         });
         
-        lastTimestamp.current = timestamp;
+        lastUpdateTime.current = now;
       }
       
-      animationFrame.current = requestAnimationFrame(animate);
+      animationFrame.current = requestAnimationFrame(gameLoop);
     };
     
-    animationFrame.current = requestAnimationFrame(animate);
+    lastUpdateTime.current = Date.now();
+    animationFrame.current = requestAnimationFrame(gameLoop);
+    
     return () => {
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+      if (animationFrame.current) {
+        cancelAnimationFrame(animationFrame.current);
+      }
     };
   }, [gameActive, config.fallSpeed, combo]);
   
@@ -269,23 +286,6 @@ export default function CandyCatchGame({ navigation, route }) {
     }
   }, [gameActive]);
   
-  // Touch handlers for basket movement - FIXED
-  const handleTouchMove = (evt) => {
-    const locationX = evt.nativeEvent.locationX;
-    let newX = locationX - 50;
-    newX = Math.max(0, Math.min(SCREEN_WIDTH - 100, newX));
-    basketX.current = newX;
-    basketAnim.setValue(newX);
-  };
-  
-  const handleTouchStart = (evt) => {
-    const locationX = evt.nativeEvent.locationX;
-    let newX = locationX - 50;
-    newX = Math.max(0, Math.min(SCREEN_WIDTH - 100, newX));
-    basketX.current = newX;
-    basketAnim.setValue(newX);
-  };
-  
   // Game Over Screen
   if (!gameActive) {
     const stars = calculateStars();
@@ -313,98 +313,100 @@ export default function CandyCatchGame({ navigation, route }) {
   }
   
   return (
-    <TouchableWithoutFeedback onPressIn={handleTouchStart}>
-      <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.levelBadge}>Level {levelNumber}</Text>
-          
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statIcon}>⭐</Text>
-              <Text style={styles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Score</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statIcon}>🎯</Text>
-              <Text style={styles.statValue}>{Math.max(0, targetScoreValue - score)}</Text>
-              <Text style={styles.statLabel}>Left</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statIcon}>⏱️</Text>
-              <Text style={[styles.statValue, timeLeft <= 5 && styles.warning]}>{timeLeft}s</Text>
-              <Text style={styles.statLabel}>Time</Text>
-            </View>
+    <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.levelBadge}>Level {levelNumber}</Text>
+        
+        <View style={styles.statsRow}>
+          <View style={styles.stat}>
+            <Text style={styles.statIcon}>⭐</Text>
+            <Text style={styles.statValue}>{score}</Text>
+            <Text style={styles.statLabel}>Score</Text>
           </View>
-          
-          {combo > 1 && (
-            <View style={styles.comboBox}>
-              <Text style={styles.comboText}>🔥 {combo}x COMBO! +{combo * 10}% 🔥</Text>
-            </View>
-          )}
-          
-          <View style={styles.missBox}>
-            <Text style={styles.missText}>💔 Misses: {missedCandies}/8</Text>
-            <View style={styles.missBarBg}>
-              <View style={[styles.missBarFill, { width: `${(missedCandies / 8) * 100}%` }]} />
-            </View>
+          <View style={styles.stat}>
+            <Text style={styles.statIcon}>🎯</Text>
+            <Text style={styles.statValue}>{Math.max(0, targetScoreValue - score)}</Text>
+            <Text style={styles.statLabel}>Left</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statIcon}>⏱️</Text>
+            <Text style={[styles.statValue, timeLeft <= 5 && styles.warning]}>{timeLeft}s</Text>
+            <Text style={styles.statLabel}>Time</Text>
           </View>
         </View>
         
-        {/* Game Area */}
-        <View 
-          style={styles.gameArea}
-          onTouchMove={handleTouchMove}
-          onTouchStart={handleTouchStart}
-        >
-          {/* Falling Candies */}
-          {candies.map(candy => (
-            <Animated.View
-              key={candy.id}
-              style={[
-                styles.candy,
-                {
-                  left: candy.x,
-                  top: candy.y,
-                  width: candy.size,
-                  height: candy.size,
-                  transform: [{
-                    rotate: candy.rotation?.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0deg', '360deg'],
-                    }) || '0deg'
-                  }]
-                }
-              ]}
-              pointerEvents="none"
-            >
-              <LinearGradient colors={[candy.color, candy.color + 'CC']} style={styles.candyInner}>
-                <Text style={styles.candyEmoji}>{candy.emoji}</Text>
-                <Text style={styles.candyValue}>+{candy.value}</Text>
-              </LinearGradient>
-            </Animated.View>
-          ))}
-          
-          {/* Sparkles */}
-          {sparkles.map(s => (
-            <Text key={s.id} style={[styles.sparkle, { left: s.x - 15, top: s.y - 15 }]}>{s.emoji}</Text>
-          ))}
-          
-          {/* Basket */}
-          <Animated.View 
-            style={[styles.basket, { transform: [{ translateX: basketAnim }] }, basketGlow && styles.basketGlow]}
+        {combo > 1 && (
+          <View style={styles.comboBox}>
+            <Text style={styles.comboText}>🔥 {combo}x COMBO! +{combo * 10}% 🔥</Text>
+          </View>
+        )}
+        
+        <View style={styles.missBox}>
+          <Text style={styles.missText}>💔 Misses: {missedCandies}/8</Text>
+          <View style={styles.missBarBg}>
+            <View style={[styles.missBarFill, { width: `${(missedCandies / 8) * 100}%` }]} />
+          </View>
+        </View>
+      </View>
+      
+      {/* Game Area with PanResponder */}
+      <View 
+        style={styles.gameArea}
+        {...panResponder.panHandlers}
+      >
+        {/* Falling Candies */}
+        {candies.map(candy => (
+          <Animated.View
+            key={candy.id}
+            style={[
+              styles.candy,
+              {
+                left: candy.x,
+                top: candy.y,
+                width: candy.size,
+                height: candy.size,
+                transform: [{
+                  rotate: candy.rotation?.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', '360deg'],
+                  }) || '0deg'
+                }]
+              }
+            ]}
             pointerEvents="none"
           >
-            <LinearGradient colors={basketGlow ? ['#FFD700', '#FFA500'] : ['#8B4513', '#A0522D']} style={styles.basketInner}>
-              <Text style={styles.basketEmoji}>🧺</Text>
-              <Text style={styles.basketLabel}>CATCH!</Text>
+            <LinearGradient colors={[candy.color, candy.color + 'CC']} style={styles.candyInner}>
+              <Text style={styles.candyEmoji}>{candy.emoji}</Text>
+              <Text style={styles.candyValue}>+{candy.value}</Text>
             </LinearGradient>
           </Animated.View>
-          
-      
+        ))}
+        
+        {/* Sparkles */}
+        {sparkles.map(s => (
+          <Text key={s.id} style={[styles.sparkle, { left: s.x - 15, top: s.y - 15 }]}>{s.emoji}</Text>
+        ))}
+        
+        {/* Basket */}
+        <Animated.View 
+          style={[styles.basket, { transform: [{ translateX: basketAnim }] }, basketGlow && styles.basketGlow]}
+          pointerEvents="none"
+        >
+          <LinearGradient colors={basketGlow ? ['#FFD700', '#FFA500'] : ['#8B4513', '#A0522D']} style={styles.basketInner}>
+            <Text style={styles.basketEmoji}>🧺</Text>
+            <Text style={styles.basketLabel}>CATCH!</Text>
+          </LinearGradient>
+        </Animated.View>
+        
+        {/* Instructions */}
+        <View style={styles.instructionContainer}>
+          <Text style={styles.instruction}>
+            👆 Drag your finger left/right to move the basket! 👆
+          </Text>
         </View>
-      </LinearGradient>
-    </TouchableWithoutFeedback>
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -415,6 +417,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingBottom: 15,
     backgroundColor: 'rgba(0,0,0,0.2)',
+    zIndex: 10,
   },
   levelBadge: {
     textAlign: 'center',
@@ -528,18 +531,21 @@ const styles = StyleSheet.create({
   },
   basketEmoji: { fontSize: 40 },
   basketLabel: { fontSize: 9, fontWeight: 'bold', color: '#FFD700', marginTop: 2 },
+  instructionContainer: {
+    position: 'absolute',
+    bottom: 10,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+  },
   instruction: {
     textAlign: 'center',
     fontSize: 12,
     color: '#FFF',
     backgroundColor: 'rgba(0,0,0,0.6)',
     padding: 8,
-    margin: 10,
     borderRadius: 20,
-    position: 'absolute',
-    bottom: 10,
-    left: 20,
-    right: 20,
+    overflow: 'hidden',
   },
   resultContainer: {
     flex: 1,
