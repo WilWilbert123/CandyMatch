@@ -1,237 +1,470 @@
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    Platform,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { candyTheme, spacing } from '../styles/theme';
 const { width, height } = Dimensions.get('window');
 
-export default function HomeScreen({ navigation }) {
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const bounceAnim = useRef(new Animated.Value(0)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
+// Custom animated button component
+const AnimatedButton = ({ item, index, onPress, fadeAnim, slideAnim }) => {
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Spin animation for candy
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      friction: 5,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 5,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
 
   useEffect(() => {
-    // Entrance animations
+    // Glow animation for first button (Game Hub)
+    if (index === 0) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: false,
+          }),
+          Animated.timing(glowAnim, {
+            toValue: 0,
+            duration: 1500,
+            useNativeDriver: false,
+          }),
+        ])
+      ).start();
+    }
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.menuButtonWrapper,
+        {
+          opacity: fadeAnim,
+          transform: [
+            { translateX: slideAnim },
+            { scale: scaleAnim },
+          ],
+        },
+      ]}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={onPress}>
+        <Animated.View
+          style={[
+            styles.glowContainer,
+            index === 0 && {
+              shadowOpacity: glowAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.3, 0.8],
+              }),
+              shadowRadius: glowAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [10, 20],
+              }),
+            },
+          ]}>
+          <LinearGradient
+            colors={item.colors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.menuGradient}>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuEmoji}>{item.emoji || '🎮'}</Text>
+              <View style={styles.menuTextContainer}>
+                <Text style={styles.menuTitle}>{item.title}</Text>
+                <Text style={styles.menuDescription}>{item.description}</Text>
+              </View>
+              <View style={styles.menuArrow}>
+                <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// Reset Confirmation Modal
+const ResetModal = ({ visible, onClose, onConfirm }) => {
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(overlayAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      scaleAnim.setValue(0.8);
+      overlayAnim.setValue(0);
+    }
+  }, [visible]);
+
+  
+};
+
+// User Stats Card
+const UserStatsCard = ({ stars, itemsCount, highScore, totalGamesPlayed }) => {
+  const statsAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(statsAnim, {
+      toValue: 1,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.statsContainer,
+        { transform: [{ scale: statsAnim }] },
+      ]}>
+      <LinearGradient
+        colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.05)']}
+        style={styles.statsCard}>
+        <View style={styles.statItem}>
+          <Text style={styles.statEmoji}>⭐</Text>
+          <Text style={styles.statValue}>{stars}</Text>
+          <Text style={styles.statLabel}>Stars</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statEmoji}>🎨</Text>
+          <Text style={styles.statValue}>{itemsCount}</Text>
+          <Text style={styles.statLabel}>Items</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statEmoji}>🎮</Text>
+          <Text style={styles.statValue}>{totalGamesPlayed}</Text>
+          <Text style={styles.statLabel}>Games</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statEmoji}>🏆</Text>
+          <Text style={styles.statValue}>{highScore}</Text>
+          <Text style={styles.statLabel}>Top Score</Text>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+};
+
+export default function HomeScreen({ navigation }) {
+  const [stars, setStars] = useState(0);
+  const [itemsCount, setItemsCount] = useState(0);
+  const [highScore, setHighScore] = useState(0);
+  const [totalGamesPlayed, setTotalGamesPlayed] = useState(0);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const headerScaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  // Enhanced menu items with descriptions and emojis
+  const menuItems = [
+    {
+      title: 'Game Hub',
+      emoji: '🎮',
+      description: 'Play all candy games',
+      screen: 'GameHub',
+      colors: ['#F1C40F', '#E67E22'],
+    },
+    {
+      title: 'Global High Scores',
+      emoji: '🌍',
+      description: 'View all game records',
+      screen: 'GlobalHighScores',
+      colors: ['#FF6B6B', '#4ECDC4'],
+    },
+    {
+      title: 'Candy Collection',
+      emoji: '🍬',
+      description: 'View your collection',
+      screen: 'CandyCollection',
+      colors: ['#FF69B4', '#9B59B6'],
+    },
+    {
+      title: 'Candy Shop',
+      emoji: '🏪',
+      description: 'Spend your stars',
+      screen: 'CandyShop',
+      colors: ['#3498DB', '#2ECC71'],
+    },
+    {
+      title: 'Achievements',
+      emoji: '🏆',
+      description: 'Track your progress',
+      screen: 'Achievements',
+      colors: ['#E67E22', '#E74C3C'],
+    },
+  ];
+
+  useEffect(() => {
+    loadUserData();
+    animateEntrance();
+  }, []);
+
+  const animateEntrance = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 800,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(headerScaleAnim, {
         toValue: 1,
         friction: 8,
         tension: 40,
         useNativeDriver: true,
       }),
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(bounceAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(bounceAnim, {
-            toValue: 0,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      ),
-      Animated.loop(
-        Animated.timing(rotateAnim, {
-          toValue: 1,
-          duration: 8000,
-          useNativeDriver: true,
-        })
-      ),
     ]).start();
-  }, []);
+  };
 
-  const bounce = bounceAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0, -15, 0],
-  });
+  const loadUserData = async () => {
+    try {
+      const totalStars = await AsyncStorage.getItem('total_stars');
+      setStars(totalStars ? parseInt(totalStars) : 0);
+
+      const purchasedItems = await AsyncStorage.getItem('purchased_items');
+      const purchased = purchasedItems ? JSON.parse(purchasedItems) : [];
+      setItemsCount(purchased.length);
+
+      const savedHighScore = await AsyncStorage.getItem('high_score');
+      setHighScore(savedHighScore ? parseInt(savedHighScore) : 0);
+
+      // Load total games played from all game sessions
+      const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
+      let totalGames = 0;
+      for (const gameId of allGames) {
+        const sessions = await AsyncStorage.getItem(`@candy_game_sessions_${gameId}`);
+        if (sessions) {
+          const parsed = JSON.parse(sessions);
+          totalGames += parsed.length;
+        }
+      }
+      setTotalGamesPlayed(totalGames);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const handleNavigation = (screen) => {
+    navigation.navigate(screen);
+  };
+
+  const handleResetProgress = async () => {
+    try {
+      // Clear all game data
+      const allGames = ['candy_match', 'candy_catch', 'candy_sort', 'candy_memory', 'candy_pop', 'candy_count', 'candy_color', 'candy_puzzle', 'candy_rush', 'candy_bingo'];
+      
+      for (const gameId of allGames) {
+        await AsyncStorage.removeItem(`@candy_game_sessions_${gameId}`);
+        await AsyncStorage.removeItem(`@candy_match_level_progress_${gameId}`);
+        await AsyncStorage.setItem(`@candy_match_unlocked_levels_${gameId}`, JSON.stringify([1]));
+      }
+      
+      // Clear user data
+      await AsyncStorage.removeItem('total_stars');
+      await AsyncStorage.removeItem('purchased_items');
+      await AsyncStorage.removeItem('high_score');
+      await AsyncStorage.removeItem('achievements');
+      
+      // Reset state
+      setStars(0);
+      setItemsCount(0);
+      setHighScore(0);
+      setTotalGamesPlayed(0);
+      
+      setResetModalVisible(false);
+      
+      // Show success message (optional)
+      alert('All progress has been reset successfully!');
+    } catch (error) {
+      console.error('Error resetting progress:', error);
+      alert('Error resetting progress. Please try again.');
+    }
+  };
 
   return (
-    <LinearGradient
-      colors={[candyTheme.gradientStart, candyTheme.gradientEnd]}
-      style={styles.container}
-    >
+    <>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
-      {/* Enhanced Decorative Background Elements */}
-      <View style={[styles.bubble, styles.bubble1]} />
-      <View style={[styles.bubble, styles.bubble2]} />
-      <View style={[styles.bubble, styles.bubble3]} />
-      <View style={[styles.bubble, styles.bubble4]} />
-      <View style={[styles.bubble, styles.bubble5]} />
-      
-      {/* Floating particles */}
-      {[...Array(8)].map((_, i) => (
-        <View
-          key={i}
-          style={[
-            styles.particle,
-            {
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-              width: 4 + Math.random() * 8,
-              height: 4 + Math.random() * 8,
-              opacity: 0.1 + Math.random() * 0.2,
-              animationDuration: `${3 + Math.random() * 4}s`,
-            },
-          ]}
-        />
-      ))}
-
-      <SafeAreaView style={styles.safeArea}>
-        <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-          
-          {/* Enhanced Header Section */}
-          <View style={styles.header}>
-            <Animated.View style={{ transform: [{ translateY: bounce }] }}>
+      <LinearGradient
+        colors={['#667eea', '#764ba2', '#f093fb']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+            bounces={true}>
+            {/* Header Section */}
+            <Animated.View
+              style={[
+                styles.header,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: headerScaleAnim }],
+                },
+              ]}>
               <Text style={styles.title}>
-                CANDY
-                <Text style={styles.titleAccent}> MATCH</Text>
+                Candy Match
+                <Text style={styles.titleAccent}> Adventure</Text>
+              </Text>
+              <Text style={styles.subtitle}>
+                Collect stars, unlock achievements, and become the candy master!
               </Text>
             </Animated.View>
-            <View style={styles.badgeContainer}>
-              <LinearGradient
-                colors={['#FFD93D', '#FF9D3D']}
-                style={styles.badgeGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.subtitle}>SWEET ADVENTURE</Text>
-              </LinearGradient>
-            </View>
-          </View>
 
-          {/* Enhanced Hero Visual */}
-          <View style={styles.heroContainer}>
-            <Animated.View style={[styles.emojiCircle, { transform: [{ rotate: spin }] }]}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.05)']}
-                style={styles.circleGradient}
-              >
-                <Text style={styles.mainEmoji}>🍬</Text>
-              </LinearGradient>
-            </Animated.View>
-            
-            {/* Animated emoji cards */}
-            <View style={styles.emojiRow}>
-              {[
-                { emoji: '🐶', color: '#FF6B6B', delay: 0 },
-                { emoji: '🐱', color: '#4ECDC4', delay: 100 },
-                { emoji: '🐭', color: '#FFE66D', delay: 200 },
-                { emoji: '🐹', color: '#FF9F4A', delay: 300 },
-              ].map((item, i) => (
-                <Animated.View
-                  key={i}
-                  style={[
-                    styles.miniEmojiCard,
-                    {
-                      backgroundColor: item.color,
-                      transform: [{ translateY: bounce }],
-                      opacity: fadeAnim,
-                    },
-                  ]}
-                >
-                  <Text style={styles.emojiText}>{item.emoji}</Text>
-                </Animated.View>
-              ))}
-            </View>
-            
-            {/* Decorative text */}
-            <Text style={styles.tagline}>Match 3 & Win Prizes!</Text>
-          </View>
+            {/* User Stats Card */}
+            <UserStatsCard
+              stars={stars}
+              itemsCount={itemsCount}
+              highScore={highScore}
+              totalGamesPlayed={totalGamesPlayed}
+            />
 
-          {/* Enhanced Action Area */}
-          <View style={styles.footer}>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('LevelSelect')}
-            >
-              <Animated.View style={[styles.buttonShadow, { transform: [{ scale: scaleAnim }] }]}>
-                <LinearGradient
-                  colors={['#FF6B6B', '#FF8E53', '#FFD93D']}
-                  style={styles.mainButton}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Text style={styles.playButtonText}>PLAY GAME</Text>
-                </LinearGradient>
+            {/* Menu Section */}
+            <View style={styles.menuSection}>
+              <Animated.View
+                style={[
+                  styles.menuHeader,
+                  {
+                    opacity: fadeAnim,
+                    transform: [{ translateX: slideAnim }],
+                  },
+                ]}>
+                <Text style={styles.menuSectionTitle}>Game Modes</Text>
+                <Text style={styles.menuSectionSubtitle}>
+                  Choose your adventure
+                </Text>
               </Animated.View>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.secondaryButton}
-              onPress={() => navigation.navigate('HighScores')}
-            >
-              <LinearGradient
-                colors={['transparent', 'transparent']}
-                style={styles.secondaryGradient}
-              >
-                <Text style={styles.secondaryButtonText}>HIGH SCORES</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-          
-        </Animated.View>
-      </SafeAreaView>
-    </LinearGradient>
+              {menuItems.map((item, index) => (
+                <AnimatedButton
+                  key={index}
+                  item={item}
+                  index={index}
+                  onPress={() => handleNavigation(item.screen)}
+                  fadeAnim={fadeAnim}
+                  slideAnim={slideAnim}
+                />
+              ))}
+
+              {/* Reset Button */}
+              <Animated.View
+                style={[
+                  styles.resetButtonWrapper,
+                  {
+                    opacity: fadeAnim,
+                    transform: [{ translateX: slideAnim }],
+                  },
+                ]}>
+               
+              </Animated.View>
+            </View>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Developed by John Wilbert Gamis
+              </Text>
+              <Text style={styles.footerVersion}>Version 2.0.0</Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
+
+      
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingVertical: Platform.OS === 'ios' ? spacing.xlarge : spacing.large },
-  header: { alignItems: 'center', marginTop: Platform.OS === 'ios' ? 20 : 40 },
-  title: { fontSize: 52, fontWeight: '900', color: '#FFF', letterSpacing: -1, textShadowColor: 'rgba(0,0,0,0.25)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 12 },
-  titleAccent: { color: '#FFD93D' },
-  badgeContainer: { marginTop: 12, borderRadius: 25, overflow: 'hidden', shadowColor: '#FFD93D', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 5 },
-  badgeGradient: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 25 },
-  subtitle: { fontSize: 14, fontWeight: '800', color: '#5C3D2E', letterSpacing: 1 },
-  heroContainer: { alignItems: 'center', width: '100%' },
-  emojiCircle: { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 30, shadowColor: '#FFD93D', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20 },
-  circleGradient: { width: '100%', height: '100%', borderRadius: 70, justifyContent: 'center', alignItems: 'center' },
-  mainEmoji: { fontSize: 72 },
-  emojiRow: { flexDirection: 'row', gap: 16, marginBottom: 24 },
-  miniEmojiCard: { padding: 12, borderRadius: 20, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
-  emojiText: { fontSize: 28 },
-  tagline: { fontSize: 16, fontWeight: '600', color: 'rgba(255,255,255,0.8)', letterSpacing: 0.5, marginTop: 8 },
-  footer: { width: '100%', paddingHorizontal: 32, paddingBottom: Platform.OS === 'ios' ? 20 : 10 },
-  buttonShadow: { shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 12 },
-  mainButton: { borderRadius: 35, height: 70, justifyContent: 'center', alignItems: 'center', borderBottomWidth: 3, borderBottomColor: '#D36B00' },
-  playButtonText: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: 1.5 },
-  secondaryButton: { marginTop: 24, alignItems: 'center', borderRadius: 25, overflow: 'hidden' },
-  secondaryGradient: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 25 },
-  secondaryButtonText: { color: 'rgba(255,255,255,0.9)', fontSize: 16, fontWeight: '700', letterSpacing: 1 },
-  bubble: { position: 'absolute', borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.15)' },
-  bubble1: { top: '5%', left: '-10%', width: 120, height: 120, opacity: 0.3 },
-  bubble2: { bottom: '20%', right: '-5%', width: 180, height: 180, opacity: 0.15 },
-  bubble3: { top: '30%', right: '15%', width: 60, height: 60, opacity: 0.2 },
-  bubble4: { bottom: '40%', left: '5%', width: 80, height: 80, opacity: 0.1 },
-  bubble5: { top: '60%', left: '20%', width: 40, height: 40, opacity: 0.25 },
-  particle: { position: 'absolute', borderRadius: 10, backgroundColor: '#FFF' },
+  content: { alignItems: 'center', paddingVertical: 20, paddingBottom: 40 },
+  header: { alignItems: 'center', paddingHorizontal: 24, marginBottom: 24 },
+  headerBadge: { backgroundColor: 'rgba(255,215,0,0.9)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
+  headerBadgeText: { fontSize: 12, fontWeight: '800', color: '#2C3E50' },
+  title: { fontSize: 42, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4, marginBottom: 8 },
+  titleAccent: { color: '#FFD700' },
+  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', paddingHorizontal: 20, lineHeight: 20 },
+  statsContainer: { width: width * 0.92, marginBottom: 24 },
+  statsCard: { flexDirection: 'row', borderRadius: 20, padding: 16, justifyContent: 'space-around', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  statItem: { alignItems: 'center', flex: 1 },
+  statEmoji: { fontSize: 24, marginBottom: 4 },
+  statValue: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 },
+  statLabel: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' },
+  statDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)' },
+  menuSection: { width: width * 0.92, marginTop: 8 },
+  menuHeader: { marginBottom: 16, paddingHorizontal: 8 },
+  menuSectionTitle: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
+  menuSectionSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  menuButtonWrapper: { marginBottom: 12 },
+  glowContainer: { borderRadius: 20, shadowColor: '#FFD700', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 10 },
+  menuGradient: { borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  menuContent: { flexDirection: 'row', alignItems: 'center' },
+  menuEmoji: { fontSize: 40, marginRight: 16 },
+  menuTextContainer: { flex: 1 },
+  menuTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
+  menuDescription: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
+  menuArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  resetButtonWrapper: { marginTop: 16, marginBottom: 8 },
+  resetButton: { borderRadius: 20, overflow: 'hidden' },
+  resetGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 },
+  resetButtonEmoji: { fontSize: 20 },
+  resetButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  footer: { marginTop: 32, alignItems: 'center' },
+  footerText: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 },
+  footerVersion: { fontSize: 10, color: 'rgba(255,255,255,0.4)' },
+ 
+  
 });

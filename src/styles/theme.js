@@ -20,9 +20,6 @@ export const candyTheme = {
   shadowColor: '#000000',
   shadowOpacity: 0.2,
   shadowRadius: 8,
-  
-  flipDuration: 300,
-  matchAnimationDuration: 500,
 };
 
 export const fontSizes = {
