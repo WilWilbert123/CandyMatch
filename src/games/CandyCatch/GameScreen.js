@@ -1,16 +1,17 @@
 // src/games/CandyCatch/GameScreen.js
+import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    PanResponder,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    Vibration,
-    View
+  Animated,
+  Dimensions,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  Vibration,
+  View
 } from 'react-native';
 import { saveGameProgress } from '../../shared/utils/globalStorage';
 import { candyTheme } from '../../styles/theme';
@@ -21,8 +22,8 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const getGameConfig = (level) => ({
   timeLimit: Math.max(20, 35 - Math.floor(level / 5)),
   targetScore: 40 + (level * 3),
-  fallSpeed: 3.5, // Reduced for better catch chance
-  spawnRate: 1000, // Increased for better performance
+  fallSpeed: 4,
+  spawnRate: 700,
 });
 
 export default function CandyCatchGame({ navigation, route }) {
@@ -42,50 +43,157 @@ export default function CandyCatchGame({ navigation, route }) {
   const [candies, setCandies] = useState([]);
   const [combo, setCombo] = useState(0);
   const [missedCandies, setMissedCandies] = useState(0);
-  const [sparkles, setSparkles] = useState([]);
-  const [basketGlow, setBasketGlow] = useState(false);
+  const [tapEffect, setTapEffect] = useState(null);
+  const [isMusicMuted, setIsMusicMuted] = useState(false);
   
-  // Refs for animations and intervals
+  // Sound refs
+  const popSoundRef = useRef(null);
+  const bgMusicRef = useRef(null);
+  const [soundsReady, setSoundsReady] = useState(false);
+  const [soundError, setSoundError] = useState(false);
+  
+  // Refs
   const spawnInterval = useRef(null);
-  const animationFrame = useRef(null);
-  const basketX = useRef(SCREEN_WIDTH / 2 - 50);
-  const basketAnim = useRef(new Animated.Value(SCREEN_WIDTH / 2 - 50)).current;
-  const lastUpdateTime = useRef(Date.now());
+  const gameLoopInterval = useRef(null);
+  const comboTimeout = useRef(null);
   
   const targetScoreValue = customTargetScore || config.targetScore;
   
   // Candy types with emojis and values
   const candyTypes = [
-    { emoji: '🍬', value: 10, size: 45, color: '#FF6B6B' },
-    { emoji: '🍭', value: 15, size: 50, color: '#FF8E8E' },
-    { emoji: '🍫', value: 20, size: 55, color: '#8B4513' },
-    { emoji: '🍪', value: 25, size: 50, color: '#D2691E' },
-    { emoji: '🍩', value: 30, size: 60, color: '#FFB6C1' },
-    { emoji: '🍰', value: 35, size: 65, color: '#FF69B4' },
+    { emoji: '🍬', value: 1, size: 50, color: '#FF6B6B' },
+    { emoji: '🍭', value: 1, size: 55, color: '#FF8E8E' },
+    { emoji: '🍫', value: 2, size: 60, color: '#8B4513' },
+    { emoji: '🍪', value: 5, size: 55, color: '#D2691E' },
+    { emoji: '🍩', value: 3, size: 65, color: '#FFB6C1' },
+    { emoji: '🍰', value: 5, size: 70, color: '#FF69B4' },
   ];
   
-  // PanResponder for basket movement
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderMove: (evt, gestureState) => {
-      // Get touch location relative to screen
-      const touchX = evt.nativeEvent.locationX;
-      let newX = touchX - 50;
-      newX = Math.max(0, Math.min(SCREEN_WIDTH - 100, newX));
-      basketX.current = newX;
-      basketAnim.setValue(newX);
-    },
-    onPanResponderGrant: (evt) => {
-      const touchX = evt.nativeEvent.locationX;
-      let newX = touchX - 50;
-      newX = Math.max(0, Math.min(SCREEN_WIDTH - 100, newX));
-      basketX.current = newX;
-      basketAnim.setValue(newX);
-    },
-  });
+  // Load background music and pop sound
+  useEffect(() => {
+    const loadSounds = async () => {
+      try {
+        // Configure audio for background music
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+        });
+        
+        // Load background music
+        const { sound: bgMusic } = await Audio.Sound.createAsync(
+          require('../../../assets/sounds/candycatchbg.mp3'),
+          { 
+            isLooping: true,
+            volume: 0.5,
+            shouldPlay: false,
+          }
+        );
+        bgMusicRef.current = bgMusic;
+        
+        // Load pop sound
+        const { sound: popSound } = await Audio.Sound.createAsync(
+          require('../../../assets/sounds/pop.mp3')
+        );
+        popSoundRef.current = popSound;
+        
+        setSoundsReady(true);
+        console.log('Sounds loaded successfully');
+        
+      } catch (error) {
+        console.log('Error loading sounds:', error);
+        setSoundError(true);
+      }
+    };
+    
+    loadSounds();
+    
+    // Cleanup sounds on unmount
+    return () => {
+      const cleanup = async () => {
+        if (bgMusicRef.current) {
+          try {
+            await bgMusicRef.current.stopAsync();
+            await bgMusicRef.current.unloadAsync();
+          } catch (e) {}
+        }
+        if (popSoundRef.current) {
+          try {
+            await popSoundRef.current.unloadAsync();
+          } catch (e) {}
+        }
+      };
+      cleanup();
+    };
+  }, []);
   
-  // Spawn a new candy
+  // Handle game active state - play/pause music
+  useEffect(() => {
+    const handleMusic = async () => {
+      if (!soundsReady || soundError) return;
+      
+      if (bgMusicRef.current) {
+        try {
+          if (gameActive && !isMusicMuted) {
+            const status = await bgMusicRef.current.getStatusAsync();
+            if (status.isLoaded && !status.isPlaying) {
+              await bgMusicRef.current.playAsync();
+            }
+          } else if (bgMusicRef.current) {
+            const status = await bgMusicRef.current.getStatusAsync();
+            if (status.isLoaded && status.isPlaying) {
+              await bgMusicRef.current.pauseAsync();
+            }
+          }
+        } catch (error) {
+          console.log('Error handling music:', error);
+        }
+      }
+    };
+    
+    handleMusic();
+  }, [gameActive, isMusicMuted, soundsReady, soundError]);
+  
+  // Toggle music mute/unmute
+  const toggleMusic = async () => {
+    if (!soundsReady || soundError) return;
+    
+    if (bgMusicRef.current) {
+      try {
+        if (isMusicMuted) {
+          await bgMusicRef.current.playAsync();
+          setIsMusicMuted(false);
+        } else {
+          await bgMusicRef.current.pauseAsync();
+          setIsMusicMuted(true);
+        }
+      } catch (error) {
+        console.log('Error toggling music:', error);
+      }
+    }
+  };
+  
+  // Play pop sound with safety checks
+  const playPopSound = async () => {
+    if (!soundsReady || soundError || !popSoundRef.current) {
+      return;
+    }
+    
+    try {
+      // Check if sound is loaded before playing
+      const status = await popSoundRef.current.getStatusAsync();
+      if (status.isLoaded) {
+        await popSoundRef.current.setPositionAsync(0);
+        await popSoundRef.current.playAsync();
+      }
+    } catch (error) {
+      // Silently fail - don't log to avoid spam
+    }
+  };
+  
+  // Spawn candy
   const spawnCandy = () => {
     const candyType = candyTypes[Math.floor(Math.random() * candyTypes.length)];
     return {
@@ -94,10 +202,11 @@ export default function CandyCatchGame({ navigation, route }) {
       y: -candyType.size,
       ...candyType,
       rotation: new Animated.Value(0),
+      scale: new Animated.Value(1),
     };
   };
   
-  // Start spawning candies
+  // Start spawning
   useEffect(() => {
     if (!gameActive) return;
     
@@ -110,7 +219,7 @@ export default function CandyCatchGame({ navigation, route }) {
     };
   }, [gameActive, config.spawnRate]);
   
-  // Apply rotation animations to new candies
+  // Animate candies (rotation and floating)
   useEffect(() => {
     candies.forEach(candy => {
       if (candy.rotation && !candy.rotation._animation) {
@@ -121,116 +230,96 @@ export default function CandyCatchGame({ navigation, route }) {
             useNativeDriver: true,
           })
         ).start();
+        
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(candy.scale, {
+              toValue: 1.05,
+              duration: 500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(candy.scale, {
+              toValue: 1,
+              duration: 500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
       }
     });
   }, [candies]);
   
-  // Add sparkle effect
-  const addSparkle = (x, y) => {
-    const id = Date.now() + Math.random();
-    setSparkles(prev => [...prev, { id, x, y, emoji: '✨' }]);
-    setTimeout(() => {
-      setSparkles(prev => prev.filter(s => s.id !== id));
-    }, 300);
+  // Handle candy tap/click with sound
+  const handleCandyTap = async (candy, candyId) => {
+    if (!gameActive) return;
+    
+    const candyToCatch = candies.find(c => c.id === candyId);
+    if (!candyToCatch) return;
+    
+    const tapX = candyToCatch.x + candyToCatch.size / 2;
+    const tapY = candyToCatch.y + candyToCatch.size / 2;
+    
+    // Play pop sound (don't await to avoid lag)
+    playPopSound();
+    
+    setTapEffect({ x: tapX, y: tapY });
+    setTimeout(() => setTapEffect(null), 200);
+    
+    setCandies(prev => prev.filter(c => c.id !== candyId));
+    
+    if (comboTimeout.current) clearTimeout(comboTimeout.current);
+    
+    setCombo(prev => prev + 1);
+    
+    const currentCombo = combo + 1;
+    const bonus = Math.floor(candyToCatch.value * (currentCombo * 0.1));
+    const totalGain = candyToCatch.value + bonus;
+    
+    setScore(prev => prev + totalGain);
+    
+    if (Platform.OS !== 'web') Vibration.vibrate(20);
+    
+    comboTimeout.current = setTimeout(() => {
+      setCombo(prev => Math.max(0, prev - 1));
+    }, 1500);
   };
   
-  // Main game loop with collision detection
+  // Main game loop - move candies down
   useEffect(() => {
     if (!gameActive) return;
     
-    const gameLoop = () => {
-      const now = Date.now();
-      const delta = Math.min(32, now - lastUpdateTime.current);
-      
-      if (delta >= 16) { // Update at ~60fps
-        setCandies(prevCandies => {
-          const remainingCandies = [];
-          const basketLeft = basketX.current;
-          const basketRight = basketX.current + 100;
-          const basketTop = SCREEN_HEIGHT - 110;
-          const basketBottom = SCREEN_HEIGHT - 30;
-          
-          let caughtAny = false;
-          let newComboValue = combo;
-          
-          for (const candy of prevCandies) {
-            // Update candy position
-            const newY = candy.y + config.fallSpeed;
-            const candyLeft = candy.x;
-            const candyRight = candy.x + candy.size;
-            const candyTop = newY;
-            const candyBottom = newY + candy.size;
-            
-            // Check collision with basket
-            const isColliding = candyBottom >= basketTop && 
-                               candyTop <= basketBottom &&
-                               candyRight > basketLeft && 
-                               candyLeft < basketRight;
-            
-            if (isColliding && candyBottom >= basketTop) {
-              // CATCH!
-              caughtAny = true;
-              if (Platform.OS !== 'web') Vibration.vibrate(30);
-              
-              // Update combo
-              newComboValue = combo + 1;
-              setCombo(newComboValue);
-              
-              // Calculate score with combo bonus
-              const bonus = Math.floor(candy.value * (newComboValue * 0.1));
-              const totalGain = candy.value + bonus;
-              
-              setScore(prev => prev + totalGain);
-              
-              // Visual effects
-              setBasketGlow(true);
-              addSparkle(candy.x + candy.size/2, basketTop);
-              
-              setTimeout(() => setBasketGlow(false), 150);
-              // Don't add to remaining (candy is caught)
-            } 
-            else if (candyBottom >= SCREEN_HEIGHT) {
-              // MISS!
-              setMissedCandies(prev => {
-                const newMissed = prev + 1;
-                if (newMissed >= 8) {
-                  setGameActive(false);
-                }
-                return newMissed;
-              });
-              setCombo(0);
-              // Don't add to remaining (candy is missed)
-            } 
-            else {
-              // Still falling
-              remainingCandies.push({ ...candy, y: newY });
-            }
-          }
-          
-          // Update combo if nothing caught this frame
-          if (!caughtAny && prevCandies.length > 0) {
-            // Don't reset combo immediately, let it decay over time
-            // For now, keep combo as is
-          }
-          
-          return remainingCandies;
-        });
+    gameLoopInterval.current = setInterval(() => {
+      setCandies(prevCandies => {
+        const remainingCandies = [];
         
-        lastUpdateTime.current = now;
-      }
-      
-      animationFrame.current = requestAnimationFrame(gameLoop);
-    };
-    
-    lastUpdateTime.current = Date.now();
-    animationFrame.current = requestAnimationFrame(gameLoop);
+        for (const candy of prevCandies) {
+          const newY = candy.y + config.fallSpeed;
+          
+          if (newY + candy.size >= SCREEN_HEIGHT) {
+            setMissedCandies(prev => {
+              const newMissed = prev + 1;
+              if (newMissed >= 8) {
+                setGameActive(false);
+              }
+              return newMissed;
+            });
+            
+            setCombo(0);
+            if (comboTimeout.current) clearTimeout(comboTimeout.current);
+          } 
+          else {
+            remainingCandies.push({ ...candy, y: newY });
+          }
+        }
+        
+        return remainingCandies;
+      });
+    }, 1000 / 60);
     
     return () => {
-      if (animationFrame.current) {
-        cancelAnimationFrame(animationFrame.current);
-      }
+      if (gameLoopInterval.current) clearInterval(gameLoopInterval.current);
     };
-  }, [gameActive, config.fallSpeed, combo]);
+  }, [gameActive, config.fallSpeed]);
   
   // Timer
   useEffect(() => {
@@ -265,8 +354,14 @@ export default function CandyCatchGame({ navigation, route }) {
     return 0;
   };
   
-  // Save progress
+  // Save and exit
   const saveAndExit = async () => {
+    if (bgMusicRef.current && soundsReady) {
+      try {
+        await bgMusicRef.current.stopAsync();
+      } catch (error) {}
+    }
+    
     const stars = calculateStars();
     await saveGameProgress(gameId, levelNumber, stars, score);
     
@@ -296,9 +391,13 @@ export default function CandyCatchGame({ navigation, route }) {
             {score >= targetScoreValue ? '🎉 WINNER! 🎉' : '😢 GAME OVER! 😢'}
           </Text>
           <Text style={styles.resultScore}>Score: {score} / {targetScoreValue}</Text>
-          <Text style={styles.resultStars}>
-            {stars === 3 ? '🌟🌟🌟' : stars === 2 ? '🌟🌟' : stars === 1 ? '🌟' : '☆☆☆'}
-          </Text>
+          <View style={styles.starsContainer}>
+            {[1, 2, 3].map(star => (
+              <Text key={star} style={styles.star}>
+                {star <= stars ? '⭐' : '☆'}
+              </Text>
+            ))}
+          </View>
           <TouchableOpacity 
             style={styles.playAgainBtn}
             onPress={() => navigation.replace('CandyCatch', { levelNumber, gameId })}
@@ -314,7 +413,12 @@ export default function CandyCatchGame({ navigation, route }) {
   
   return (
     <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
-      {/* Header */}
+      <TouchableOpacity style={styles.musicButton} onPress={toggleMusic}>
+        <Text style={styles.musicButtonText}>
+          {isMusicMuted ? '🔇' : '🔊'}
+        </Text>
+      </TouchableOpacity>
+      
       <View style={styles.header}>
         <Text style={styles.levelBadge}>Level {levelNumber}</Text>
         
@@ -336,9 +440,9 @@ export default function CandyCatchGame({ navigation, route }) {
           </View>
         </View>
         
-        {combo > 1 && (
+        {Math.floor(combo) > 1 && (
           <View style={styles.comboBox}>
-            <Text style={styles.comboText}>🔥 {combo}x COMBO! +{combo * 10}% 🔥</Text>
+            <Text style={styles.comboText}>🔥 {Math.floor(combo)}x COMBO! 🔥</Text>
           </View>
         )}
         
@@ -350,61 +454,51 @@ export default function CandyCatchGame({ navigation, route }) {
         </View>
       </View>
       
-      {/* Game Area with PanResponder */}
-      <View 
-        style={styles.gameArea}
-        {...panResponder.panHandlers}
-      >
-        {/* Falling Candies */}
+      <View style={styles.gameArea}>
         {candies.map(candy => (
-          <Animated.View
+          <TouchableWithoutFeedback
             key={candy.id}
-            style={[
-              styles.candy,
-              {
-                left: candy.x,
-                top: candy.y,
-                width: candy.size,
-                height: candy.size,
-                transform: [{
-                  rotate: candy.rotation?.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0deg', '360deg'],
-                  }) || '0deg'
-                }]
-              }
-            ]}
-            pointerEvents="none"
+            onPress={() => handleCandyTap(candy, candy.id)}
           >
-            <LinearGradient colors={[candy.color, candy.color + 'CC']} style={styles.candyInner}>
-              <Text style={styles.candyEmoji}>{candy.emoji}</Text>
-              <Text style={styles.candyValue}>+{candy.value}</Text>
-            </LinearGradient>
-          </Animated.View>
+            <Animated.View
+              style={[
+                styles.candy,
+                {
+                  left: candy.x,
+                  top: candy.y,
+                  width: candy.size,
+                  height: candy.size,
+                  transform: [
+                    {
+                      rotate: candy.rotation?.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0deg', '360deg'],
+                      }) || '0deg'
+                    },
+                    {
+                      scale: candy.scale || 1
+                    }
+                  ]
+                }
+              ]}
+            >
+              <LinearGradient colors={[candy.color, candy.color + 'CC']} style={styles.candyInner}>
+                <Text style={styles.candyEmoji}>{candy.emoji}</Text>
+                <Text style={styles.candyValue}>+{candy.value}</Text>
+              </LinearGradient>
+            </Animated.View>
+          </TouchableWithoutFeedback>
         ))}
         
-        {/* Sparkles */}
-        {sparkles.map(s => (
-          <Text key={s.id} style={[styles.sparkle, { left: s.x - 15, top: s.y - 15 }]}>{s.emoji}</Text>
-        ))}
+        {tapEffect && (
+          <Animated.Text 
+            style={[styles.tapEffect, { left: tapEffect.x - 20, top: tapEffect.y - 20 }]}
+          >
+            ✨ POP! ✨
+          </Animated.Text>
+        )}
         
-        {/* Basket */}
-        <Animated.View 
-          style={[styles.basket, { transform: [{ translateX: basketAnim }] }, basketGlow && styles.basketGlow]}
-          pointerEvents="none"
-        >
-          <LinearGradient colors={basketGlow ? ['#FFD700', '#FFA500'] : ['#8B4513', '#A0522D']} style={styles.basketInner}>
-            <Text style={styles.basketEmoji}>🧺</Text>
-            <Text style={styles.basketLabel}>CATCH!</Text>
-          </LinearGradient>
-        </Animated.View>
-        
-        {/* Instructions */}
-        <View style={styles.instructionContainer}>
-          <Text style={styles.instruction}>
-            👆 Drag your finger left/right to move the basket! 👆
-          </Text>
-        </View>
+         
       </View>
     </LinearGradient>
   );
@@ -412,6 +506,23 @@ export default function CandyCatchGame({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  musicButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 50,
+    right: 20,
+    zIndex: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    width: 45,
+    height: 45,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  musicButtonText: {
+    fontSize: 24,
+  },
   header: {
     paddingTop: Platform.OS === 'ios' ? 50 : 40,
     paddingHorizontal: 15,
@@ -495,55 +606,56 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  candyEmoji: { fontSize: 24 },
+  candyEmoji: { fontSize: 28 },
   candyValue: {
     fontSize: 10,
     fontWeight: 'bold',
     color: '#FFF',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 4,
     borderRadius: 8,
     marginTop: 2,
   },
-  sparkle: {
+  tapEffect: {
     position: 'absolute',
-    fontSize: 20,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFD700',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
     zIndex: 20,
   },
-  basket: {
-    position: 'absolute',
-    bottom: 20,
-    width: 100,
-    height: 85,
-    zIndex: 15,
-  },
-  basketGlow: {
-    transform: [{ scale: 1.1 }],
-  },
-  basketInner: {
-    flex: 1,
-    borderRadius: 35,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFD700',
-  },
-  basketEmoji: { fontSize: 40 },
-  basketLabel: { fontSize: 9, fontWeight: 'bold', color: '#FFD700', marginTop: 2 },
   instructionContainer: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 20,
     left: 20,
     right: 20,
     alignItems: 'center',
   },
   instruction: {
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: 'bold',
     color: '#FFF',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 10,
+    borderRadius: 25,
+    overflow: 'hidden',
+    marginBottom: 5,
+  },
+  instructionSub: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#FFD700',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 5,
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -565,9 +677,13 @@ const styles = StyleSheet.create({
     color: '#FFF',
     marginBottom: 20,
   },
-  resultStars: {
-    fontSize: 48,
+  starsContainer: {
+    flexDirection: 'row',
     marginBottom: 30,
+  },
+  star: {
+    fontSize: 48,
+    marginHorizontal: 10,
   },
   playAgainBtn: {
     borderRadius: 25,
