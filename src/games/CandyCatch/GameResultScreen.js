@@ -1,13 +1,57 @@
 // src/games/CandyCatch/GameResultScreen.js
+import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { candyTheme, fontSizes, spacing } from '../../styles/theme';
 
 export default function GameResultScreen({ navigation, route }) {
   const { score, targetScore, stars, levelNumber, gameId, isWin } = route.params;
+  
+  const winSoundRef = useRef(null);
+  const [soundReady, setSoundReady] = useState(false);
 
   const nextLevel = levelNumber + 1;
-  const isNextLevelUnlocked = score >= targetScore * 0.7; 
+  const isNextLevelUnlocked = score >= targetScore * 0.7;
+
+  // Load and play sound when component mounts
+  useEffect(() => {
+    const loadAndPlaySound = async () => {
+      try {
+        // Configure audio mode
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+
+        if (isWin) {
+          // Load win sound
+          const { sound: winSound } = await Audio.Sound.createAsync(
+            require('../../../assets/sounds/win.mp3')
+          );
+          winSoundRef.current = winSound;
+          setSoundReady(true);
+          
+          // Play the sound
+          await winSound.playAsync();
+        }
+      } catch (error) {
+        console.log('Error playing result sound:', error);
+      }
+    };
+
+    loadAndPlaySound();
+
+    // Cleanup sounds on unmount
+    return () => {
+      if (winSoundRef.current) {
+        try {
+          winSoundRef.current.unloadAsync();
+        } catch (error) {}
+      }
+    };
+  }, [isWin]);
 
   return (
     <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
@@ -49,7 +93,7 @@ export default function GameResultScreen({ navigation, route }) {
 
           <TouchableOpacity
             style={styles.levelSelectButton}
-            onPress={() => navigation.navigate('CandyCatchLevelSelect', { gameId })}  // CHANGED THIS LINE
+            onPress={() => navigation.navigate('CandyCatchLevelSelect', { gameId })}
           >
             <Text style={styles.levelSelectText}>Level Select</Text>
           </TouchableOpacity>
