@@ -73,7 +73,6 @@ export default function CandyCatchGame({ navigation, route }) {
   useEffect(() => {
     const loadSounds = async () => {
       try {
-        // Configure audio for background music
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
@@ -82,7 +81,6 @@ export default function CandyCatchGame({ navigation, route }) {
           staysActiveInBackground: true,
         });
         
-        // Load background music
         const { sound: bgMusic } = await Audio.Sound.createAsync(
           require('../../../assets/sounds/candycatchbg.mp3'),
           { 
@@ -93,7 +91,6 @@ export default function CandyCatchGame({ navigation, route }) {
         );
         bgMusicRef.current = bgMusic;
         
-        // Load pop sound
         const { sound: popSound } = await Audio.Sound.createAsync(
           require('../../../assets/sounds/pop.mp3')
         );
@@ -110,7 +107,6 @@ export default function CandyCatchGame({ navigation, route }) {
     
     loadSounds();
     
-    // Cleanup sounds on unmount
     return () => {
       const cleanup = async () => {
         if (bgMusicRef.current) {
@@ -182,14 +178,13 @@ export default function CandyCatchGame({ navigation, route }) {
     }
     
     try {
-      // Check if sound is loaded before playing
       const status = await popSoundRef.current.getStatusAsync();
       if (status.isLoaded) {
         await popSoundRef.current.setPositionAsync(0);
         await popSoundRef.current.playAsync();
       }
     } catch (error) {
-      // Silently fail - don't log to avoid spam
+      // Silently fail
     }
   };
   
@@ -219,7 +214,7 @@ export default function CandyCatchGame({ navigation, route }) {
     };
   }, [gameActive, config.spawnRate]);
   
-  // Animate candies (rotation and floating)
+  // Animate candies
   useEffect(() => {
     candies.forEach(candy => {
       if (candy.rotation && !candy.rotation._animation) {
@@ -249,7 +244,7 @@ export default function CandyCatchGame({ navigation, route }) {
     });
   }, [candies]);
   
-  // Handle candy tap/click with sound
+  // Handle candy tap
   const handleCandyTap = async (candy, candyId) => {
     if (!gameActive) return;
     
@@ -259,7 +254,6 @@ export default function CandyCatchGame({ navigation, route }) {
     const tapX = candyToCatch.x + candyToCatch.size / 2;
     const tapY = candyToCatch.y + candyToCatch.size / 2;
     
-    // Play pop sound (don't await to avoid lag)
     playPopSound();
     
     setTapEffect({ x: tapX, y: tapY });
@@ -354,7 +348,7 @@ export default function CandyCatchGame({ navigation, route }) {
     return 0;
   };
   
-  // Save and exit
+  // Save and exit - FIXED: Use CandyCatchResult
   const saveAndExit = async () => {
     if (bgMusicRef.current && soundsReady) {
       try {
@@ -365,12 +359,13 @@ export default function CandyCatchGame({ navigation, route }) {
     const stars = calculateStars();
     await saveGameProgress(gameId, levelNumber, stars, score);
     
-    navigation.replace('GameResult', {
+    // FIXED: Navigate to CandyCatchResult instead of GameResult
+    navigation.replace('CandyCatchResult', {
       score,
       targetScore: targetScoreValue,
       stars,
       levelNumber,
-      gameId,
+      gameId: 'candy_catch',
       isWin: score >= targetScoreValue,
     });
   };
@@ -497,8 +492,6 @@ export default function CandyCatchGame({ navigation, route }) {
             ✨ POP! ✨
           </Animated.Text>
         )}
-        
-         
       </View>
     </LinearGradient>
   );
@@ -631,33 +624,6 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
     zIndex: 20,
-  },
-  instructionContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    alignItems: 'center',
-  },
-  instruction: {
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFF',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 10,
-    borderRadius: 25,
-    overflow: 'hidden',
-    marginBottom: 5,
-  },
-  instructionSub: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#FFD700',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 5,
-    borderRadius: 20,
-    overflow: 'hidden',
   },
   resultContainer: {
     flex: 1,
