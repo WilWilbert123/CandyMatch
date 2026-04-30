@@ -17,6 +17,12 @@ import CandySortGameResult from '../games/CandySort/GameResultScreen';
 import CandySortGameScreen from '../games/CandySort/GameScreen';
 import CandySortLevelSelect from '../games/CandySort/LevelSelectScreen';
 
+//Candy Memory imports
+import CandyMemoryGameResult from '../games/CandyMemory/GameResultScreen';
+import CandyMemoryGameScreen from '../games/CandyMemory/GameScreen';
+import CandyMemoryLevelSelect from '../games/CandyMemory/LevelSelectScreen';
+
+
 // Other screens
 import AchievementsScreen from '../screens/AchievementsScreen';
 import CandyCollectionScreen from '../screens/CandyCollectionScreen';
@@ -150,7 +156,28 @@ const AppNavigator = () => {
         component={CandySortGameResult}
         options={{ headerShown: false }}
       />
+
+      <Stack.Screen
+        name="CandyMemoryLevelSelect"
+        component={CandyMemoryLevelSelect}
+        options={{ headerShown: false, title: 'Candy Memory Levels' }}
+      />
+      <Stack.Screen
+        name="CandyMemory"
+        component={CandyMemoryGameScreen}
+        options={{ headerShown: false, title: 'Candy Memory' }}
+      />
+      <Stack.Screen
+        name="CandyMemoryResult"
+        component={CandyMemoryGameResult}
+        options={{ headerShown: false }}
+      />
+
     </Stack.Navigator>
+
+
+
+
   );
 };
 

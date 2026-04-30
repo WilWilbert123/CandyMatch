@@ -24,7 +24,7 @@ const GAMES = [
     emoji: '🍭',
     badge: '⭐',
     badgeColor: '#FFD700',
-    navigateTo: 'CandyMatchLevelSelect', // Specific screen
+    navigateTo: 'CandyMatchLevelSelect',
   },
   {
     id: 'candy_catch',
@@ -36,7 +36,7 @@ const GAMES = [
     emoji: '🍫',
     badge: '⚡',
     badgeColor: '#FFA500',
-    navigateTo: 'CandyCatchLevelSelect', // Specific screen
+    navigateTo: 'CandyCatchLevelSelect',
   },
   {
     id: 'candy_sort',
@@ -48,7 +48,7 @@ const GAMES = [
     emoji: '🌈',
     badge: '🧸',
     badgeColor: '#FF6B6B',
-    navigateTo: 'CandySortLevelSelect', // Specific screen for Candy Sort
+    navigateTo: 'CandySortLevelSelect',
   },
   {
     id: 'candy_memory',
@@ -60,7 +60,7 @@ const GAMES = [
     emoji: '🎯',
     badge: '🏆',
     badgeColor: '#FFD700',
-    navigateTo: 'GameLauncher', // Use GameLauncher for now
+    navigateTo: 'CandyMemoryLevelSelect', // ← CHANGED THIS LINE
   },
   {
     id: 'candy_pop',
@@ -178,6 +178,9 @@ export default function GameHubScreen({ navigation }) {
         break;
       case 'CandySortLevelSelect':
         navigation.navigate('CandySortLevelSelect', { gameId: game.id });
+        break;
+      case 'CandyMemoryLevelSelect': // ← ADD THIS CASE
+        navigation.navigate('CandyMemoryLevelSelect', { gameId: game.id });
         break;
       case 'GameLauncher':
       default:
