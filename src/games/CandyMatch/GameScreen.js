@@ -1,11 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    StyleSheet,
-    Text,
-    View,
+  Dimensions,
+  FlatList,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import Button from '../../components/Button';
 import Card from '../../components/Card';
@@ -124,7 +124,7 @@ export default function GameScreen({ route, navigation }) {
 
   const handleLevelMap = () => {
     setShowModal(false);
-    navigation.navigate('LevelSelect', { gameId: gameId });
+    navigation.navigate('LevelSelectScreen', { gameId: gameId });
   };
 
   return (

@@ -1,14 +1,15 @@
+// src/screens/GameHubScreen.js
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    FlatList,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  FlatList,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { candyTheme, fontSizes, spacing } from '../styles/theme';
 
@@ -23,6 +24,7 @@ const GAMES = [
     emoji: '🍭',
     badge: '⭐',
     badgeColor: '#FFD700',
+    navigateTo: 'CandyMatchLevelSelect', // Specific screen
   },
   {
     id: 'candy_catch',
@@ -34,6 +36,7 @@ const GAMES = [
     emoji: '🍫',
     badge: '⚡',
     badgeColor: '#FFA500',
+    navigateTo: 'CandyCatchLevelSelect', // Specific screen
   },
   {
     id: 'candy_sort',
@@ -45,6 +48,7 @@ const GAMES = [
     emoji: '🌈',
     badge: '🧸',
     badgeColor: '#FF6B6B',
+    navigateTo: 'CandySortLevelSelect', // Specific screen for Candy Sort
   },
   {
     id: 'candy_memory',
@@ -56,6 +60,7 @@ const GAMES = [
     emoji: '🎯',
     badge: '🏆',
     badgeColor: '#FFD700',
+    navigateTo: 'GameLauncher', // Use GameLauncher for now
   },
   {
     id: 'candy_pop',
@@ -67,6 +72,7 @@ const GAMES = [
     emoji: '💥',
     badge: '🎉',
     badgeColor: '#FF1493',
+    navigateTo: 'GameLauncher',
   },
   {
     id: 'candy_count',
@@ -78,6 +84,7 @@ const GAMES = [
     emoji: '📊',
     badge: '🔢',
     badgeColor: '#2ECC71',
+    navigateTo: 'GameLauncher',
   },
   {
     id: 'candy_color',
@@ -89,6 +96,7 @@ const GAMES = [
     emoji: '🖍️',
     badge: '🎨',
     badgeColor: '#FF6B6B',
+    navigateTo: 'GameLauncher',
   },
   {
     id: 'candy_puzzle',
@@ -100,6 +108,7 @@ const GAMES = [
     emoji: '🔍',
     badge: '🧩',
     badgeColor: '#F39C12',
+    navigateTo: 'GameLauncher',
   },
   {
     id: 'candy_rush',
@@ -111,6 +120,7 @@ const GAMES = [
     emoji: '🚀',
     badge: '💨',
     badgeColor: '#FFD700',
+    navigateTo: 'GameLauncher',
   },
   {
     id: 'candy_bingo',
@@ -122,6 +132,7 @@ const GAMES = [
     emoji: '🎯',
     badge: '🎲',
     badgeColor: '#E74C3C',
+    navigateTo: 'GameLauncher',
   },
 ];
 
@@ -150,26 +161,30 @@ export default function GameHubScreen({ navigation }) {
     }).start();
   };
 
- 
-const handleGamePress = (gameId, index) => {
-  if (Platform.OS === 'ios') {
-    // You can add haptic feedback here if desired
-  }
+  const handleGamePress = (game, index) => {
+    if (Platform.OS === 'ios') {
+      // You can add haptic feedback here if desired
+    }
 
-  // Navigation based on game ID
-  switch (gameId) {
-    case 'candy_match':
-      navigation.navigate('LevelSelect', { gameId: gameId, gameName: 'Candy Match' });
-      break;
-    case 'candy_catch':
-      // Navigate to Candy Catch Level Select
-      navigation.navigate('CandyCatchLevelSelect', { gameId: gameId });
-      break;
-    default:
-      navigation.navigate('GameLauncher', { gameId: gameId });
-      break;
-  }
-};
+    console.log('Navigating to:', game.navigateTo, 'for game:', game.id);
+
+    // Navigation based on the game's navigateTo property
+    switch (game.navigateTo) {
+      case 'CandyMatchLevelSelect':
+        navigation.navigate('CandyMatchLevelSelect', { gameId: game.id });
+        break;
+      case 'CandyCatchLevelSelect':
+        navigation.navigate('CandyCatchLevelSelect', { gameId: game.id });
+        break;
+      case 'CandySortLevelSelect':
+        navigation.navigate('CandySortLevelSelect', { gameId: game.id });
+        break;
+      case 'GameLauncher':
+      default:
+        navigation.navigate('GameLauncher', { gameId: game.id });
+        break;
+    }
+  };
 
   const renderGameCard = ({ item, index }) => {
     return (
@@ -185,7 +200,7 @@ const handleGamePress = (gameId, index) => {
           activeOpacity={0.85}
           onPressIn={() => handlePressIn(index)}
           onPressOut={() => handlePressOut(index)}
-          onPress={() => handleGamePress(item.id, index)}
+          onPress={() => handleGamePress(item, index)}
           style={styles.touchable}
         >
           <LinearGradient
