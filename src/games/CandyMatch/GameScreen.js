@@ -1,3 +1,4 @@
+// src/games/CandyMatch/GameScreen.js
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import {
@@ -19,7 +20,7 @@ import { useGameLogic } from './useGameLogic';
 const { width } = Dimensions.get('window');
 
 export default function GameScreen({ route, navigation }) {
-  const { levelNumber = 1, gameId = 'candy_match' } = route.params || {}; // Add gameId with default
+  const { levelNumber = 1, gameId = 'candy_match' } = route.params || {};
   const [showModal, setShowModal] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
 
@@ -59,19 +60,16 @@ export default function GameScreen({ route, navigation }) {
     }
   }, [isGameComplete, starsEarned, playWin]);
 
-  // Save progress when game completes - UPDATED with gameId
+  // Save progress when game completes
   useEffect(() => {
     if (isGameComplete && starsEarned > 0 && showModal && !hasSaved) {
       const timeSpent = levelConfig.timeLimit ? (levelConfig.timeLimit - (timeLeft || 0)) : 0;
-      // Save level progress with gameId
       saveLevelProgress(gameId, levelNumber, starsEarned, score, moves, timeSpent);
-      // Save game session with gameId
       saveGameSession(gameId, score, matchedIndices.length / 2, timeSpent, 'Player', levelNumber, starsEarned);
       setHasSaved(true);
     }
   }, [isGameComplete, starsEarned, showModal, hasSaved, gameId, levelNumber, levelConfig, timeLeft, score, moves, matchedIndices.length]);
 
-  // Add a safety check - if levelConfig is undefined, show loading
   if (!levelConfig || !cards.length) {
     return (
       <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
@@ -106,7 +104,7 @@ export default function GameScreen({ route, navigation }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Modal handlers
+  // Modal handlers - FIXED navigation to use correct screen names
   const handlePlayAgain = () => {
     setShowModal(false);
     setHasSaved(false);
@@ -118,13 +116,15 @@ export default function GameScreen({ route, navigation }) {
     if (nextLevel <= 100) {
       setShowModal(false);
       setHasSaved(false);
-      navigation.replace('Game', { levelNumber: nextLevel, gameId: gameId });
+      // FIXED: Navigate to 'CandyMatch' instead of 'Game'
+      navigation.replace('CandyMatch', { levelNumber: nextLevel, gameId: gameId });
     }
   };
 
   const handleLevelMap = () => {
     setShowModal(false);
-    navigation.navigate('LevelSelectScreen', { gameId: gameId });
+    // FIXED: Navigate to 'CandyMatchLevelSelect' instead of 'LevelSelect'
+    navigation.navigate('CandyMatchLevelSelect', { gameId: gameId });
   };
 
   return (
@@ -167,7 +167,7 @@ export default function GameScreen({ route, navigation }) {
       
       <View style={styles.buttonContainer}>
         <Button title="Restart" onPress={initializeGame} variant="secondary" />
-        <Button title="Map" onPress={() => navigation.navigate('LevelSelect', { gameId: gameId })} />
+        <Button title="Map" onPress={() => navigation.navigate('CandyMatchLevelSelect', { gameId: gameId })} />
       </View>
 
       {/* Level Complete Modal */}

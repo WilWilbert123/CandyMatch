@@ -1,8 +1,8 @@
+// src/screens/GameLauncherScreen.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Button from '../components/Button';
+import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { candyTheme, fontSizes, spacing } from '../styles/theme';
 
 export default function GameLauncherScreen({ route, navigation }) {
@@ -19,70 +19,80 @@ export default function GameLauncherScreen({ route, navigation }) {
       emoji: '🍬', 
       levels: 100, 
       colors: ['#FF6B6B', '#4ECDC4'], 
-      screen: 'Game'  // This maps to your existing Game screen (Candy Match)
+      screen: 'CandyMatch',  // FIXED: Changed from 'Game' to 'CandyMatch'
+      levelSelectScreen: 'CandyMatchLevelSelect'
     },
     candy_catch: { 
       name: 'Candy Catch', 
       emoji: '🍭', 
       levels: 50, 
       colors: ['#FF69B4', '#9B59B6'], 
-      screen: 'CandyCatch'  // This maps to your Candy Catch screen
+      screen: 'CandyCatch',
+      levelSelectScreen: 'CandyCatchLevelSelect'
     },
     candy_sort: { 
       name: 'Candy Sort', 
       emoji: '🍫', 
       levels: 40, 
       colors: ['#F1C40F', '#E67E22'], 
-      screen: 'Game'  // Placeholder - create CandySort screen later
+      screen: 'CandySort',
+      levelSelectScreen: 'CandySortLevelSelect'
     },
     candy_memory: { 
       name: 'Candy Memory', 
       emoji: '🧠', 
       levels: 80, 
       colors: ['#9B59B6', '#E67E22'], 
-      screen: 'Game'  // Placeholder - create CandyMemory screen later
+      screen: 'CandyMemory',
+      levelSelectScreen: 'CandyMemoryLevelSelect'
     },
     candy_pop: { 
       name: 'Candy Pop', 
       emoji: '🎈', 
       levels: 60, 
       colors: ['#E74C3C', '#FF6B6B'], 
-      screen: 'Game'  // Placeholder - create CandyPop screen later
+      screen: 'CandyPop',
+      levelSelectScreen: 'CandyPopLevelSelect'
     },
     candy_count: { 
       name: 'Candy Count', 
       emoji: '🔢', 
       levels: 30, 
       colors: ['#3498DB', '#2ECC71'], 
-      screen: 'Game'  // Placeholder - create CandyCount screen later
+      screen: 'GameLauncher',
+      levelSelectScreen: 'GameHub'
     },
     candy_color: { 
       name: 'Candy Color', 
       emoji: '🎨', 
       levels: 20, 
       colors: ['#2ECC71', '#3498DB'], 
-      screen: 'Game'  // Placeholder - create CandyColor screen later
+      screen: 'GameLauncher',
+      levelSelectScreen: 'GameHub'
     },
     candy_puzzle: { 
       name: 'Candy Puzzle', 
       emoji: '🧩', 
       levels: 50, 
       colors: ['#2ECC71', '#3498DB'], 
-      screen: 'Game'  // Placeholder - create CandyPuzzle screen later
+      screen: 'GameLauncher',
+      levelSelectScreen: 'GameHub'
     },
     candy_rush: { 
       name: 'Candy Rush', 
       emoji: '⚡', 
       levels: 70, 
       colors: ['#F1C40F', '#E67E22'], 
-      screen: 'Game'  // Placeholder - create CandyRush screen later
+      screen: 'GameLauncher',
+      levelSelectScreen: 'GameHub'
     },
     candy_bingo: { 
       name: 'Candy Bingo', 
       emoji: '🎲', 
       levels: 40, 
       colors: ['#9B59B6', '#E74C3C'], 
-      screen: 'Game'  // Placeholder - create CandyBingo screen later
+      screen: 'GameLauncher',
+      levelSelectScreen: 'GameHub'
     },
   };
 
@@ -93,14 +103,24 @@ export default function GameLauncherScreen({ route, navigation }) {
   }, []);
 
   const loadProgress = async () => {
-    const prog = await AsyncStorage.getItem(`game_progress_${gameId}`);
-    setProgress(prog ? JSON.parse(prog) : { completedLevels: [] });
+    try {
+      const prog = await AsyncStorage.getItem(`game_progress_${gameId}`);
+      setProgress(prog ? JSON.parse(prog) : { completedLevels: [], bestStars: {} });
+    } catch (error) {
+      console.error('Error loading progress:', error);
+      setProgress({ completedLevels: [], bestStars: {} });
+    }
   };
 
   // Function to start the game
   const startGame = (levelNumber) => {
     // Navigate to the specific game screen with the level number
-    navigation.navigate(game.screen, { levelNumber: levelNumber });
+    navigation.navigate(game.screen, { levelNumber: levelNumber, gameId: gameId });
+  };
+
+  // Function to go to level select
+  const goToLevelSelect = () => {
+    navigation.navigate(game.levelSelectScreen, { gameId: gameId });
   };
 
   if (showLevelSelect) {
@@ -139,34 +159,16 @@ export default function GameLauncherScreen({ route, navigation }) {
                   style={styles.levelGradient}
                 >
                   <Text style={styles.levelNumber}>{levelNum}</Text>
-                  <Text style={styles.starsText}>{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</Text>
+                  <Text style={styles.starsText}>
+                    {'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
         
-        <View style={styles.pagination}>
-          <Button 
-            title="◀ Prev" 
-            onPress={() => setCurrentPage(Math.max(0, currentPage - 1))} 
-            variant="secondary" 
-            disabled={currentPage === 0} 
-          />
-          <Text style={styles.pageText}>Page {currentPage + 1}/{totalPages}</Text>
-          <Button 
-            title="Next ▶" 
-            onPress={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))} 
-            variant="secondary" 
-            disabled={currentPage === totalPages - 1} 
-          />
-        </View>
-        
-        <Button 
-          title="← Back to Game Hub" 
-          onPress={() => navigation.navigate('GameHub')} 
-          variant="secondary" 
-        />
+         
       </LinearGradient>
     );
   }
@@ -238,5 +240,10 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.body, 
     color: candyTheme.textLight, 
     marginHorizontal: spacing.medium 
+  },
+  bottomButtons: {
+    flexDirection: 'row',
+    gap: spacing.medium,
+    marginTop: spacing.medium,
   },
 });
