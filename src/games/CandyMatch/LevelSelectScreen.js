@@ -68,7 +68,7 @@ export default function LevelSelectScreen({ navigation, route }) {
         style={[styles.levelCard, !isUnlocked && styles.levelLocked]}
         onPress={() => {
           if (isUnlocked) {
-            navigation.navigate('Game', { 
+            navigation.navigate('CandyMatch', { 
               levelNumber: level.levelNumber, 
               gameId: gameId 
             });

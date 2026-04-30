@@ -1,4 +1,4 @@
-// src/games/CandyCatch/LevelSelectScreen.js
+// src/games/CandyPop/LevelSelectScreen.js
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import {
@@ -10,27 +10,27 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getGameProgress } from '../../shared/utils/globalStorage'; // Fixed import
+import { getGameProgress } from '../../shared/utils/globalStorage';
 import { candyTheme, fontSizes, spacing } from '../../styles/theme';
 
-// Generate Candy Catch levels (50 levels)
-const generateCandyCatchLevels = () => {
+// Generate Candy Pop levels (50 levels)
+const generateCandyPopLevels = () => {
   const levels = [];
   for (let i = 1; i <= 50; i++) {
     levels.push({
       id: i,
       levelNumber: i,
-      timeLimit: Math.max(20, 35 - Math.floor(i / 5)),
-      targetScore: 40 + (i * 3),
+      timeLimit: Math.max(20, 45 - Math.floor(i / 3)),
+      targetScore: 100 + (i * 15),
     });
   }
   return levels;
 };
 
-const CANDY_CATCH_LEVELS = generateCandyCatchLevels();
+const CANDY_POP_LEVELS = generateCandyPopLevels();
 
 export default function LevelSelectScreen({ navigation, route }) {
-  const { gameId = 'candy_catch' } = route.params || {};
+  const { gameId = 'candy_pop' } = route.params || {};
   const [unlockedLevels, setUnlockedLevels] = useState([1]);
   const [selectedWorld, setSelectedWorld] = useState(1);
   const [levelStars, setLevelStars] = useState({});
@@ -38,12 +38,12 @@ export default function LevelSelectScreen({ navigation, route }) {
 
   // Create worlds (10 levels per world for 50 total levels)
   const worlds = [];
-  for (let i = 0; i < CANDY_CATCH_LEVELS.length; i += 10) {
+  for (let i = 0; i < CANDY_POP_LEVELS.length; i += 10) {
     worlds.push({
       id: i / 10 + 1,
-      levels: CANDY_CATCH_LEVELS.slice(i, i + 10),
+      levels: CANDY_POP_LEVELS.slice(i, i + 10),
       startLevel: i + 1,
-      endLevel: Math.min(i + 10, CANDY_CATCH_LEVELS.length)
+      endLevel: Math.min(i + 10, CANDY_POP_LEVELS.length)
     });
   }
 
@@ -56,18 +56,14 @@ export default function LevelSelectScreen({ navigation, route }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Use getGameProgress from your storage
       const progress = await getGameProgress(gameId);
       
-      // Unlocked levels are those completed + 1
       const completedLevels = progress.completedLevels || [];
-      const unlocked = [1]; // Level 1 is always unlocked
+      const unlocked = [1];
       
-      // Add completed levels and next level
       for (let i = 1; i <= 50; i++) {
         if (completedLevels.includes(i)) {
           if (!unlocked.includes(i)) unlocked.push(i);
-          // Unlock next level if current is completed
           if (i + 1 <= 50 && !unlocked.includes(i + 1)) {
             unlocked.push(i + 1);
           }
@@ -76,16 +72,15 @@ export default function LevelSelectScreen({ navigation, route }) {
       
       setUnlockedLevels(unlocked);
       
-      // Get stars for each level from bestStars
       const stars = {};
-      for (let i = 1; i <= CANDY_CATCH_LEVELS.length; i++) {
+      for (let i = 1; i <= CANDY_POP_LEVELS.length; i++) {
         stars[i] = progress.bestStars?.[i] || 0;
       }
       setLevelStars(stars);
       
-      console.log('Loaded data:', { unlocked, stars }); // Debug log
+      console.log('Loaded Candy Pop levels:', { unlocked, stars });
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading Candy Pop data:', error);
     } finally {
       setLoading(false);
     }
@@ -102,7 +97,7 @@ export default function LevelSelectScreen({ navigation, route }) {
         style={[styles.levelCard, !isUnlocked && styles.levelLocked]}
         onPress={() => {
           if (isUnlocked) {
-            navigation.navigate('CandyCatch', { 
+            navigation.navigate('CandyPop', { 
               levelNumber: level.levelNumber, 
               gameId: gameId,
               timeLimit: level.timeLimit,
@@ -142,9 +137,9 @@ export default function LevelSelectScreen({ navigation, route }) {
     <LinearGradient colors={[candyTheme.gradientStart, candyTheme.gradientEnd]} style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>◀</Text>
+          <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>🍬 Candy Catch 🧺</Text>
+        <Text style={styles.title}>🎈 Candy Pop 💥</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -209,6 +204,10 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: spacing.small,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
+    minWidth: 60,
+    alignItems: 'center',
   },
   backButtonText: {
     fontSize: fontSizes.body,
@@ -216,7 +215,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   placeholder: {
-    width: 50,
+    width: 60,
   },
   title: {
     fontSize: fontSizes.title,
@@ -255,7 +254,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    height:100
+    height: 100,
   },
   worldButtonActive: {
     backgroundColor: candyTheme.candyYellow,
