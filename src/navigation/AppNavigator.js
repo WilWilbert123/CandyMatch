@@ -27,6 +27,13 @@ import CandyPopGameResult from '../games/CandyPop/GameResultScreen';
 import CandyPopGameScreen from '../games/CandyPop/GameScreen';
 import CandyPopLevelSelect from '../games/CandyPop/LevelSelectScreen';
 
+//Candy Count imports
+import CandyCountGameResult from '../games/CandyCount/GameResultScreen';
+import CandyCountGameScreen from '../games/CandyCount/GameScreen';
+import CandyCountLevelSelect from '../games/CandyCount/LevelSelectScreen';
+
+
+
 // Other screens
 import AchievementsScreen from '../screens/AchievementsScreen';
 import CandyCollectionScreen from '../screens/CandyCollectionScreen';
@@ -178,21 +185,35 @@ const AppNavigator = () => {
       />
 
       <Stack.Screen
-  name="CandyPopLevelSelect"
-  component={CandyPopLevelSelect}
-  options={{ headerShown: false, title: 'Candy Pop Levels' }}
+        name="CandyPopLevelSelect"
+        component={CandyPopLevelSelect}
+        options={{ headerShown: false, title: 'Candy Pop Levels' }}
+      />
+      <Stack.Screen
+        name="CandyPop"
+        component={CandyPopGameScreen}
+        options={{ headerShown: false, title: 'Candy Pop' }}
+      />
+      <Stack.Screen
+        name="CandyPopResult"
+        component={CandyPopGameResult}
+        options={{ headerShown: false }}
+      />
+    <Stack.Screen
+  name="CandyCountLevelSelect"
+  component={CandyCountLevelSelect}
+  options={{ headerShown: false, title: 'Candy Count Levels' }}
 />
 <Stack.Screen
-  name="CandyPop"
-  component={CandyPopGameScreen}
-  options={{ headerShown: false, title: 'Candy Pop' }}
+  name="CandyCount"
+  component={CandyCountGameScreen}
+  options={{ headerShown: false, title: 'Candy Count' }}
 />
 <Stack.Screen
-  name="CandyPopResult"
-  component={CandyPopGameResult}
+  name="CandyCountResult"
+  component={CandyCountGameResult}
   options={{ headerShown: false }}
 />
-
     </Stack.Navigator>
 
 

@@ -59,8 +59,8 @@ export default function GameLauncherScreen({ route, navigation }) {
       emoji: '🔢', 
       levels: 30, 
       colors: ['#3498DB', '#2ECC71'], 
-      screen: 'GameLauncher',
-      levelSelectScreen: 'GameHub'
+      screen: 'CandyCount',
+      levelSelectScreen: 'CandyCountLevelSelect'
     },
     candy_color: { 
       name: 'Candy Color', 
