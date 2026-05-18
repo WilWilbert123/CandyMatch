@@ -74,18 +74,18 @@ const GAMES = [
     badgeColor: '#FF1493',
     navigateTo: 'GameLauncher',
   },
-  {
-    id: 'candy_count',
-    name: 'Candy Count',
-    description: 'Count the candies!',
-    colors: ['#3498DB', '#5DADE2'],
-    levels: 30,
-    icon: '🔢',
-    emoji: '📊',
-    badge: '🔢',
-    badgeColor: '#2ECC71',
-    navigateTo: 'GameLauncher',
-  },
+ {
+  id: 'candy_count',
+  name: 'Candy Count',
+  description: 'Count the candies!',
+  colors: ['#3498DB', '#5DADE2'],
+  levels: 30,
+  icon: '🔢',
+  emoji: '📊',
+  badge: '🔢',
+  badgeColor: '#2ECC71',
+   navigateTo: 'CandyCountLevelSelect',
+},
   {
     id: 'candy_color',
     name: 'Candy Color',
@@ -182,6 +182,10 @@ export default function GameHubScreen({ navigation }) {
       case 'CandyMemoryLevelSelect': // ← ADD THIS CASE
         navigation.navigate('CandyMemoryLevelSelect', { gameId: game.id });
         break;
+      case 'CandyCountLevelSelect':
+        navigation.navigate('CandyCountLevelSelect', { gameId: game.id });
+        break;
+        
       case 'GameLauncher':
       default:
         navigation.navigate('GameLauncher', { gameId: game.id });

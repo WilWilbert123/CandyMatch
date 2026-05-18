@@ -1,3 +1,4 @@
+// src/shared/utils/storage.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Storage Keys - Now dynamic with gameId
@@ -47,6 +48,30 @@ export async function saveLevelProgress(gameId, levelNumber, starsEarned, score,
     return true;
   } catch (error) {
     console.error('Error saving level progress:', error);
+    return false;
+  }
+}
+
+// THIS IS THE CRITICAL FUNCTION - Make sure it's exported
+export async function updateGameProgress(gameId, levelNumber, score, stars, isWin) {
+  try {
+    console.log('updateGameProgress called:', { gameId, levelNumber, score, stars, isWin });
+    
+    if (isWin) {
+      // Save the level progress
+      await saveLevelProgress(gameId, levelNumber, stars, score, 0, 0);
+      
+      // Save game session
+      await saveGameSession(gameId, score, 0, 0, 'Player', levelNumber, stars);
+      
+      console.log('Game progress updated successfully');
+      return true;
+    } else {
+      console.log('Game lost, no progress saved');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error updating game progress:', error);
     return false;
   }
 }
@@ -117,7 +142,7 @@ export async function resetLevelProgress(gameId) {
   }
 }
 
-// Game Sessions Management (Now handles ALL games)
+// Game Sessions Management
 export async function saveGameSession(gameId, score, matchesFound, timePlayed, childName, levelNumber, starsEarned) {
   try {
     const keys = getStorageKeys(gameId);
@@ -383,4 +408,22 @@ export async function clearAllData() {
     console.error('Error clearing all data:', error);
     return false;
   }
+}
+
+// Helper function for LevelSelectScreen compatibility
+export async function getGameProgress(gameId) {
+  const progress = await getLevelProgress(gameId);
+  const unlockedLevels = await getUnlockedLevels(gameId);
+  
+  // Convert to the format expected by LevelSelectScreen
+  const bestStars = {};
+  progress.forEach(level => {
+    bestStars[level.levelNumber] = level.bestStars;
+  });
+  
+  return {
+    completedLevels: progress.map(l => l.levelNumber),
+    bestStars: bestStars,
+    unlockedLevels: unlockedLevels
+  };
 }
